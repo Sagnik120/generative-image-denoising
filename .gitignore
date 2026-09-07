@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Datasets & downloaded archives
+data/*
+!data/.gitkeep
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.part
+
+# Model checkpoints & large artifacts
+*.pt
+*.pth
+*.ckpt
+results/*/checkpoints/*
+results/*/submission/*
+!results/**/.gitkeep
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+
+# Python environments
+.venv/
+venv/
+env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
