@@ -1,0 +1,21 @@
+# Core
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.23.0
+opencv-python-headless>=4.7.0
+Pillow>=9.5.0
+pyyaml>=6.0
+tqdm>=4.65.0
+
+# Metrics (matching the competition's reference implementations exactly)
+scikit-image>=0.21.0
+DISTS-pytorch>=0.1
+fvcore>=0.1.5.post20221221
+ptflops>=0.7           # fallback FLOPs counter if fvcore has trouble with a given architecture
+
+# Data handling / download
+requests>=2.31.0
+
+# Visualization / reporting
+matplotlib>=3.7.0
+pandas>=2.0.0
