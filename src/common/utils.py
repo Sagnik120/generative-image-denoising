@@ -48,3 +48,27 @@ class Timer:
         return self
     def __exit__(self, *args):
         self.elapsed = time.time() - self.t0
+
+def save_checkpoint(state: dict, path: str):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    torch.save(state, path)
+
+def load_checkpoint(path: str, map_location=None):
+    return torch.load(path, map_location=map_location)
+
+def save_json(obj: dict, path: str):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(obj, f, indent=2)
+
+def load_yaml(path: str) -> dict:
+    import yaml
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+def ensure_dirs(*paths):
+    for p in paths:
+        Path(p).mkdir(parents=True, exist_ok=True)
+
+def get_device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
