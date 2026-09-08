@@ -66,3 +66,20 @@ class NAFBlock(nn.Module):
         y = self.conv4(y)
         x = x + y * self.gamma
         return x
+
+class Downsample(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.op = nn.Conv2d(in_ch, out_ch, kernel_size=2, stride=2)
+    def forward(self, x):
+        return self.op(x)
+
+class Upsample(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.op = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch * 4, kernel_size=1, bias=False),
+            nn.PixelShuffle(2),
+        )
+    def forward(self, x):
+        return self.op(x)
