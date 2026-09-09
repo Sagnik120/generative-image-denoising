@@ -37,3 +37,38 @@ def add_speckle_noise(img, sigma_range=(0.02, 0.35)):
     sigma = random.uniform(*sigma_range)
     noise = np.random.normal(0, sigma, img.shape).astype(np.float32)
     return _clip(img + img * noise)
+
+def apply_gaussian_blur(img, ksize_range=(3, 15), sigma_range=(0.3, 3.5)):
+    k = random.choice(range(ksize_range[0], ksize_range[1] + 1, 2))
+    sigma = random.uniform(*sigma_range)
+    return _clip(cv2.GaussianBlur(img, (k, k), sigma))
+
+def _motion_blur_kernel(ksize, angle):
+    kernel = np.zeros((ksize, ksize), dtype=np.float32)
+    kernel[ksize // 2, :] = 1.0
+    M = cv2.getRotationMatrix2D((ksize / 2 - 0.5, ksize / 2 - 0.5), angle, 1.0)
+    kernel = cv2.warpAffine(kernel, M, (ksize, ksize))
+    s = kernel.sum()
+    if s > 0:
+        kernel /= s
+    return kernel
+
+def apply_motion_blur(img, ksize_range=(5, 21), angle_range=(0, 360)):
+    ksize = random.choice(range(ksize_range[0], ksize_range[1] + 1, 2))
+    angle = random.uniform(*angle_range)
+    kernel = _motion_blur_kernel(ksize, angle)
+    return _clip(cv2.filter2D(img, -1, kernel, borderType=cv2.BORDER_REFLECT))
+
+def _disk_kernel(radius):
+    size = radius * 2 + 1
+    y, x = np.ogrid[-radius:radius + 1, -radius:radius + 1]
+    mask = x ** 2 + y ** 2 <= radius ** 2
+    kernel = np.zeros((size, size), dtype=np.float32)
+    kernel[mask] = 1.0
+    kernel /= kernel.sum()
+    return kernel
+
+def apply_defocus_blur(img, radius_range=(1, 9)):
+    radius = random.randint(*radius_range)
+    kernel = _disk_kernel(radius)
+    return _clip(cv2.filter2D(img, -1, kernel, borderType=cv2.BORDER_REFLECT))
