@@ -1,23 +1,47 @@
-"""Synthetic degradation pipeline."""
+"""
+Synthetic degradation pipeline.
+
+Covers every degradation family explicitly listed in the competition brief
+(Section 3.2): Gaussian noise, Poisson noise, salt-and-pepper, speckle,
+Gaussian blur, motion blur, defocus blur, JPEG artifacts, chromatic
+aberration, and mixed/combined degradations -- plus a couple of *extra*
+corruption types (downsampling blur, brightness/contrast jitter, sensor
+banding) that are NOT in the brief's list on purpose. Since the held-out
+set may contain undisclosed degradation types (Section 3.2 / Section 4),
+training against a strictly wider variety than the disclosed list is the
+single best lever for zero-shot generalization (this is exactly GenDeg's
+lesson from the literature review: broaden and randomize the corruption
+pipeline as much as possible).
+
+All functions operate on float32 numpy arrays in HWC layout, range [0, 1],
+and return the same format so they can be freely chained.
+"""
 import random
 import io
 import numpy as np
 import cv2
 from PIL import Image
 
+
 def _clip(img):
     return np.clip(img, 0.0, 1.0).astype(np.float32)
+
+
+# ------------------------- noise family ------------------------- #
 
 def add_gaussian_noise(img, sigma_range=(2, 50)):
     sigma = random.uniform(*sigma_range) / 255.0
     noise = np.random.normal(0, sigma, img.shape).astype(np.float32)
     return _clip(img + noise)
 
+
 def add_poisson_noise(img, scale_range=(1.0, 12.0)):
+    # Lower "scale" == fewer photons == more relative noise.
     scale = random.uniform(*scale_range)
     vals = 2 ** np.ceil(np.log2(scale * 30))
     noisy = np.random.poisson(img * vals) / float(vals)
     return _clip(noisy)
+
 
 def add_salt_and_pepper(img, amount_range=(0.001, 0.05)):
     amount = random.uniform(*amount_range)
@@ -25,23 +49,30 @@ def add_salt_and_pepper(img, amount_range=(0.001, 0.05)):
     h, w, c = img.shape
     n_salt = int(amount * h * w * 0.5)
     n_pepper = int(amount * h * w * 0.5)
+
     ys = np.random.randint(0, h, n_salt)
     xs = np.random.randint(0, w, n_salt)
     out[ys, xs, :] = 1.0
+
     ys = np.random.randint(0, h, n_pepper)
     xs = np.random.randint(0, w, n_pepper)
     out[ys, xs, :] = 0.0
     return _clip(out)
+
 
 def add_speckle_noise(img, sigma_range=(0.02, 0.35)):
     sigma = random.uniform(*sigma_range)
     noise = np.random.normal(0, sigma, img.shape).astype(np.float32)
     return _clip(img + img * noise)
 
+
+# ------------------------- blur family ------------------------- #
+
 def apply_gaussian_blur(img, ksize_range=(3, 15), sigma_range=(0.3, 3.5)):
     k = random.choice(range(ksize_range[0], ksize_range[1] + 1, 2))
     sigma = random.uniform(*sigma_range)
     return _clip(cv2.GaussianBlur(img, (k, k), sigma))
+
 
 def _motion_blur_kernel(ksize, angle):
     kernel = np.zeros((ksize, ksize), dtype=np.float32)
@@ -53,11 +84,13 @@ def _motion_blur_kernel(ksize, angle):
         kernel /= s
     return kernel
 
+
 def apply_motion_blur(img, ksize_range=(5, 21), angle_range=(0, 360)):
     ksize = random.choice(range(ksize_range[0], ksize_range[1] + 1, 2))
     angle = random.uniform(*angle_range)
     kernel = _motion_blur_kernel(ksize, angle)
     return _clip(cv2.filter2D(img, -1, kernel, borderType=cv2.BORDER_REFLECT))
+
 
 def _disk_kernel(radius):
     size = radius * 2 + 1
@@ -68,10 +101,14 @@ def _disk_kernel(radius):
     kernel /= kernel.sum()
     return kernel
 
+
 def apply_defocus_blur(img, radius_range=(1, 9)):
     radius = random.randint(*radius_range)
     kernel = _disk_kernel(radius)
     return _clip(cv2.filter2D(img, -1, kernel, borderType=cv2.BORDER_REFLECT))
+
+
+# ------------------------- compression / color ------------------------- #
 
 def apply_jpeg_compression(img, quality_range=(10, 75)):
     quality = random.randint(*quality_range)
@@ -83,6 +120,7 @@ def apply_jpeg_compression(img, quality_range=(10, 75)):
     decoded = np.array(Image.open(buf).convert("RGB")).astype(np.float32) / 255.0
     return _clip(decoded)
 
+
 def apply_chromatic_aberration(img, shift_range=(1, 6)):
     h, w, _ = img.shape
     shift = random.randint(*shift_range)
@@ -90,6 +128,11 @@ def apply_chromatic_aberration(img, shift_range=(1, 6)):
     r_shifted = np.roll(r, shift, axis=1)
     b_shifted = np.roll(b, -shift, axis=0)
     return _clip(np.stack([r_shifted, g, b_shifted], axis=-1))
+
+
+# ------------------------- extra / undisclosed-style corruptions ------------------------- #
+# Not in the brief's explicit list -- included so the model sees degradation
+# *families* beyond the disclosed ones, improving zero-shot robustness.
 
 def apply_downsample_blur(img, factor_range=(2, 4)):
     h, w, _ = img.shape
@@ -99,11 +142,13 @@ def apply_downsample_blur(img, factor_range=(2, 4)):
     back = cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
     return _clip(back)
 
+
 def apply_brightness_contrast_jitter(img, brightness_range=(-0.15, 0.15), contrast_range=(0.75, 1.25)):
     brightness = random.uniform(*brightness_range)
     contrast = random.uniform(*contrast_range)
     out = (img - 0.5) * contrast + 0.5 + brightness
     return _clip(out)
+
 
 def apply_sensor_banding(img, strength_range=(0.01, 0.06)):
     h, w, _ = img.shape
@@ -111,3 +156,49 @@ def apply_sensor_banding(img, strength_range=(0.01, 0.06)):
     bands = np.sin(np.linspace(0, random.uniform(10, 40) * np.pi, h)) * strength
     out = img + bands[:, None, None]
     return _clip(out)
+
+
+NOISE_FNS = [add_gaussian_noise, add_poisson_noise, add_salt_and_pepper, add_speckle_noise]
+BLUR_FNS = [apply_gaussian_blur, apply_motion_blur, apply_defocus_blur, apply_downsample_blur]
+OTHER_FNS = [apply_jpeg_compression, apply_chromatic_aberration,
+             apply_brightness_contrast_jitter, apply_sensor_banding]
+
+ALL_FNS = NOISE_FNS + BLUR_FNS + OTHER_FNS
+
+
+class RandomDegradation:
+    """
+    Applies a random combination of 1-3 degradations per call, with
+    randomized severities, so the model never sees the same exact
+    corruption recipe twice. This directly implements the "broad,
+    randomized, on-the-fly corruption pipeline" recommendation from the
+    literature review (GenDeg's lesson) instead of a small fixed list of
+    hand-coded presets.
+    """
+
+    def __init__(self, min_ops=1, max_ops=3, always_include_noise=False, seed=None):
+        self.min_ops = min_ops
+        self.max_ops = max_ops
+        self.always_include_noise = always_include_noise
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+
+    def __call__(self, img: np.ndarray) -> np.ndarray:
+        n_ops = random.randint(self.min_ops, self.max_ops)
+        fns = []
+        if self.always_include_noise:
+            fns.append(random.choice(NOISE_FNS))
+            n_ops -= 1
+        pool = ALL_FNS
+        fns += random.sample(pool, k=min(n_ops, len(pool)))
+        random.shuffle(fns)
+
+        out = img.copy()
+        for fn in fns:
+            try:
+                out = fn(out)
+            except Exception:
+                # Never let a single degenerate degradation crash training.
+                continue
+        return _clip(out)
