@@ -1,0 +1,28 @@
+# Config for the NAFNet-style U-Net architecture (primary recommendation).
+architecture: nafnet_unet
+
+model:
+  width: 32                      # base channel width; try 16 for a smaller/cheaper variant
+  enc_blocks: [2, 2, 4, 8]       # NAFBlocks per encoder stage
+  middle_blocks: 4
+  dec_blocks: [2, 2, 2, 2]       # NAFBlocks per decoder stage
+  predict_residual: true         # predict (clean - corrupted) instead of clean directly
+
+data:
+  patch_size: 256
+  batch_size: 16
+  num_workers: 4
+  val_fraction: 0.03
+  download_bsds: true
+  min_degrade_ops: 1
+  max_degrade_ops: 3
+
+train:
+  epochs: 60
+  lr: 0.0002
+  lr_min: 0.000001
+  weight_decay: 0.0001
+  loss: charbonnier            # options: l1, l2, charbonnier
+  visualize_every: 2
+  checkpoint_every: 1
+  seed: 42
