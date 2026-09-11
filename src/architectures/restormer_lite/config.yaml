@@ -1,0 +1,29 @@
+# Config for the Restormer-lite (efficient Transformer) architecture.
+architecture: restormer_lite
+
+model:
+  width: 24                       # lower than the paper's 48 to keep FLOPs competition-friendly
+  enc_blocks: [2, 3, 3]
+  middle_blocks: 4
+  dec_blocks: [3, 3, 2]
+  num_heads: [1, 2, 4]
+  predict_residual: true
+
+data:
+  patch_size: 256
+  batch_size: 8                   # transformer attention is heavier; smaller batch than NAFNet
+  num_workers: 4
+  val_fraction: 0.03
+  download_bsds: true
+  min_degrade_ops: 1
+  max_degrade_ops: 3
+
+train:
+  epochs: 60
+  lr: 0.0003
+  lr_min: 0.000001
+  weight_decay: 0.0001
+  loss: charbonnier
+  visualize_every: 2
+  checkpoint_every: 1
+  seed: 42
