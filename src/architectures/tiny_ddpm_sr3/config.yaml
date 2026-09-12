@@ -1,0 +1,32 @@
+# Config for the Tiny Conditional Diffusion (SR3-style, few-step) architecture.
+# WARNING: true inference FLOPs = (per-step FLOPs) x timesteps. Keep `timesteps`
+# small and `width` modest to stay competitive on the FLOPs axis -- see
+# docs/tiny_ddpm_sr3/notes.md.
+architecture: tiny_ddpm_sr3
+
+model:
+  timesteps: 8                   # T -- number of diffusion steps (both train + inference)
+  width: 24
+  enc_blocks: [2, 2, 3]
+  middle_blocks: 3
+  dec_blocks: [3, 2, 2]
+  time_emb_dim: 128
+
+data:
+  patch_size: 256
+  batch_size: 12
+  num_workers: 4
+  val_fraction: 0.03
+  download_bsds: true
+  min_degrade_ops: 1
+  max_degrade_ops: 3
+
+train:
+  epochs: 80                     # diffusion objectives typically need more epochs to converge
+  lr: 0.0002
+  lr_min: 0.000001
+  weight_decay: 0.0001
+  loss: l2                       # DDPM's original noise-prediction loss is MSE
+  visualize_every: 4             # sampling is slower (T steps), visualize less often
+  checkpoint_every: 1
+  seed: 42
