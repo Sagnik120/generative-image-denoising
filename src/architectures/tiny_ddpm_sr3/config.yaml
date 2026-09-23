@@ -14,8 +14,8 @@ model:
 
 data:
   patch_size: 256
-  batch_size: 12
-  num_workers: 4
+  batch_size: 6
+  num_workers: 2
   val_fraction: 0.03
   download_bsds: true
   min_degrade_ops: 1
