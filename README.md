@@ -1,5 +1,7 @@
 # Generative Image Denoising — Mini Competition Project
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Sagnik120/generative-image-denoising/blob/main/notebooks/train_colab.ipynb)
+
 A scalable, multi-architecture training framework for the "Small
 Generative Model for Image Denoising" mini competition. Built to let you
 train, evaluate, and compare **multiple generative architectures** against
