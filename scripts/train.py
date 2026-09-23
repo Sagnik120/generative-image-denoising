@@ -37,6 +37,7 @@ def parse_args():
     p.add_argument("--results_root", default=str(PROJECT_ROOT / "results"),
                     help="Root results directory (each architecture gets its own subfolder).")
     p.add_argument("--epochs", type=int, default=None, help="Override epochs from config.")
+    p.add_argument("--batch_size", type=int, default=None, help="Override batch size from config.")
     p.add_argument("--device", default=None, choices=["cuda", "mps", "cpu"],
                     help="Device to train on (defaults to auto-detecting cuda -> mps -> cpu).")
     p.add_argument("--resume", default=None, help="Path to a checkpoint to resume from.")
