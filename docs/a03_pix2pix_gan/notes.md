@@ -1,4 +1,4 @@
-# pix2pix_gan — Architecture Notes
+# a03_pix2pix_gan — Architecture Notes
 
 ## Source
 Isola, P., Zhu, J.-Y., Zhou, T., & Efros, A. A. (2017). *Image-to-Image
@@ -11,7 +11,7 @@ edges. Adversarial training pushes the network toward *realistic* looking
 outputs instead of merely low-error ones.
 
 ## How it works (plain language)
-- A **generator** (the same NAFBlock-based U-Net used in `nafnet_unet`,
+- A **generator** (the same NAFBlock-based U-Net used in `a01_nafnet_unet`,
   reused here so the two architectures are directly comparable) maps
   corrupted -> restored images.
 - A **PatchGAN discriminator** looks at 70x70 overlapping patches of
@@ -30,14 +30,14 @@ outputs instead of merely low-error ones.
 - The discriminator is **training-only** -- it is thrown away for the
   final submission, so this approach costs you nothing extra at
   inference/FLOPs time. Only the generator (identical architecture to
-  `nafnet_unet`) ships.
+  `a01_nafnet_unet`) ships.
 
 ## Trade-off to watch
 - GAN training is less stable than plain supervised regression: watch the
   `gan_loss_curve.png` (generator vs discriminator loss) for signs of
   mode collapse (discriminator loss collapsing to near-zero while
   generator loss climbs) or oscillation.
-- PSNR/SSIM may come in slightly *lower* than the plain `nafnet_unet`
+- PSNR/SSIM may come in slightly *lower* than the plain `a01_nafnet_unet`
   (which optimizes pixel accuracy directly), even if DISTS improves --
   this is the classic "realism vs pixel-fidelity" trade-off the
   literature review's Pix2Pix section describes.
@@ -53,9 +53,9 @@ outputs instead of merely low-error ones.
 
 ## Things to try if this underperforms
 - Increase `lambda_recon` if outputs look "hallucinated" or PSNR drops
-  too much relative to `nafnet_unet`.
+  too much relative to `a01_nafnet_unet`.
 - Decrease it if outputs still look blurry / GAN isn't having any visible
   effect on texture sharpness.
 - Compare the `visualizations/epoch_*_comparison.png` grids side-by-side
-  with `nafnet_unet`'s at the same epoch to see the realism difference
+  with `a01_nafnet_unet`'s at the same epoch to see the realism difference
   directly.
