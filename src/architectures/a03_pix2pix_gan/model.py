@@ -4,7 +4,7 @@ Pix2Pix-style conditional GAN.
 Based on Isola et al., "Image-to-Image Translation with Conditional
 Adversarial Networks" (CVPR 2017), reviewed in the literature review
 Section 3.1. A U-Net generator (built from the same NAFBlock backbone used
-in nafnet_unet, so it's cheap) is trained with a combination of:
+in a01_nafnet_unet, so it's cheap) is trained with a combination of:
   - Reconstruction loss (L1 / Charbonnier) against the clean image
   - Adversarial loss from a PatchGAN discriminator that looks at
     (corrupted, output) vs (corrupted, real-clean) pairs
@@ -24,7 +24,7 @@ from src.common.losses import build_reconstruction_loss, gan_loss
 
 
 class UNetGenerator(nn.Module):
-    """Same lightweight NAFBlock-based U-Net used in nafnet_unet -- reused here as the
+    """Same lightweight NAFBlock-based U-Net used in a01_nafnet_unet -- reused here as the
     Pix2Pix generator so the two architectures are directly comparable."""
 
     def __init__(self, in_ch=3, out_ch=3, width=32, enc_blocks=(2, 2, 4, 8),
@@ -131,8 +131,8 @@ class Pix2PixGANBundle:
         self.sched_g = torch.optim.lr_scheduler.CosineAnnealingLR(self.opt_g, T_max=epochs)
         self.sched_d = torch.optim.lr_scheduler.CosineAnnealingLR(self.opt_d, T_max=epochs)
 
-        print(f"[pix2pix_gan] Generator parameters: {count_parameters(self.generator):,}")
-        print(f"[pix2pix_gan] Discriminator parameters: {count_parameters(self.discriminator):,}")
+        print(f"[a03_pix2pix_gan] Generator parameters: {count_parameters(self.generator):,}")
+        print(f"[a03_pix2pix_gan] Discriminator parameters: {count_parameters(self.discriminator):,}")
 
     def train_step(self, corrupted, clean):
         self.generator.train()
