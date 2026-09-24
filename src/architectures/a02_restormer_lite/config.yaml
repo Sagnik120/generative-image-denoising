@@ -1,5 +1,5 @@
 # Config for the Restormer-lite (efficient Transformer) architecture.
-architecture: restormer_lite
+architecture: a02_restormer_lite
 
 model:
   width: 24                       # lower than the paper's 48 to keep FLOPs competition-friendly
