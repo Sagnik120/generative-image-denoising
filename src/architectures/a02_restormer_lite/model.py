@@ -8,7 +8,7 @@ attention is computed across CHANNELS instead of spatial positions, which
 gives linear (not quadratic) complexity in image size -- this is what makes
 Transformer-quality restoration feasible at 256x256 without exploding FLOPs.
 
-Trade-off vs. nafnet_unet: typically higher quality ceiling (especially on
+Trade-off vs. a01_nafnet_unet: typically higher quality ceiling (especially on
 structure/perceptual metrics like DISTS) at a higher FLOPs cost -- see the
 literature review's FLOPs comparison (Restormer ~1128.9 GFLOPs vs NAFNet
 ~505.5 GFLOPs at 512x512). Train both and compare in results/ to decide
@@ -162,7 +162,7 @@ class RestormerLiteBundle:
             self.optimizer, T_max=cfg["train"]["epochs"],
             eta_min=cfg["train"].get("lr_min", 1e-6),
         )
-        print(f"[restormer_lite] Model parameters: {count_parameters(self.model):,}")
+        print(f"[a02_restormer_lite] Model parameters: {count_parameters(self.model):,}")
 
     def train_step(self, corrupted, clean):
         self.model.train()
