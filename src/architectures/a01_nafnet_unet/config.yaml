@@ -1,5 +1,5 @@
 # Config for the NAFNet-style U-Net architecture (primary recommendation).
-architecture: nafnet_unet
+architecture: a01_nafnet_unet
 
 model:
   width: 32                      # base channel width; try 16 for a smaller/cheaper variant
