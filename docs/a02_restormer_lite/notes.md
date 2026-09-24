@@ -1,4 +1,4 @@
-# restormer_lite — Architecture Notes
+# a02_restormer_lite — Architecture Notes
 
 ## Source
 Zamir, S. W., Arora, A., Khan, S., Hayat, M., Khan, F. S., & Yang, M.-H.
@@ -26,7 +26,7 @@ attention to be efficient enough for restoration tasks.
 - Historically higher quality ceiling than plain CNNs, especially on
   structure/perceptual metrics (SSIM, DISTS), because self-attention
   captures longer-range dependencies than convolution alone.
-- Directly comparable to `nafnet_unet` in this project since both use the
+- Directly comparable to `a01_nafnet_unet` in this project since both use the
   same U-Net skeleton, downsampling/upsampling, and training loop -- only
   the per-block computation differs. This makes the two an easy head-to-
   head comparison.
@@ -34,10 +34,10 @@ attention to be efficient enough for restoration tasks.
 ## Trade-off to watch
 - This is the "heavier" of the two CNN/Transformer options here. Even with
   a reduced `width` (24 vs the original paper's 48) and fewer heads, it
-  will typically cost more FLOPs than `nafnet_unet` at matched depth. The
+  will typically cost more FLOPs than `a01_nafnet_unet` at matched depth. The
   literature review's Section 5 reports ~1128.9 GFLOPs for full Restormer
   vs ~505.5 GFLOPs for NAFNet at 512x512 -- watch your own measured
-  `metrics/final_report.json` GFLOPs number closely against `nafnet_unet`'s.
+  `metrics/final_report.json` GFLOPs number closely against `a01_nafnet_unet`'s.
 
 ## Key config knobs (`config.yaml`)
 - `width`: base channels (kept at 24, well below the original paper's 48,
@@ -48,8 +48,8 @@ attention to be efficient enough for restoration tasks.
 
 ## Things to try if this underperforms or is too expensive
 - Reduce `width` further (e.g. 16) and/or block counts.
-- Compare training curves against `nafnet_unet` directly -- if the quality
-  gain doesn't justify the extra FLOPs, `nafnet_unet` is likely the better
+- Compare training curves against `a01_nafnet_unet` directly -- if the quality
+  gain doesn't justify the extra FLOPs, `a01_nafnet_unet` is likely the better
   submission given the competition's FLOPs-weighted scoring (Section 6 of
   the brief: all four axes are weighted, so a small quality edge isn't
   automatically worth a large FLOPs penalty).
