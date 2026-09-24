@@ -1,4 +1,4 @@
-# nafnet_unet — Architecture Notes
+# a01_nafnet_unet — Architecture Notes
 
 ## Source
 Chen, L., Chu, X., Zhang, X., & Sun, J. (2022). *Simple Baselines for Image
