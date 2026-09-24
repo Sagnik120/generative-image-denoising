@@ -1,5 +1,5 @@
 # Config for the Pix2Pix-style conditional GAN architecture.
-architecture: pix2pix_gan
+architecture: a03_pix2pix_gan
 
 model:
   width: 32
