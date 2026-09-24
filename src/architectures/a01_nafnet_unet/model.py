@@ -1,7 +1,7 @@
 """
 NAFNet-style U-Net -- the recommended primary architecture.
 
-Why this one first (see docs/nafnet_unet/notes.md for the full rationale
+Why this one first (see docs/a01_nafnet_unet/notes.md for the full rationale
 pulled from the literature review):
   - NAFNet (Chen et al., ECCV 2022) strips out expensive nonlinear
     activations, replacing them with a cheap "Simple Gate" -- this measures
@@ -102,7 +102,7 @@ class NAFNetBundle:
             self.optimizer, T_max=cfg["train"]["epochs"],
             eta_min=cfg["train"].get("lr_min", 1e-6),
         )
-        print(f"[nafnet_unet] Model parameters: {count_parameters(self.model):,}")
+        print(f"[a01_nafnet_unet] Model parameters: {count_parameters(self.model):,}")
 
     def train_step(self, corrupted, clean):
         self.model.train()
