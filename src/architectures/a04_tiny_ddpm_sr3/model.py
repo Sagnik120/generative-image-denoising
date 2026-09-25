@@ -20,7 +20,7 @@ inference FLOPs to (T x one U-Net forward pass), which stays competitive
 if the per-step U-Net is kept small.
 
 This is the most experimental of the four architectures here: expect it to
-be more finicky to train than nafnet_unet or restormer_lite, and to cost
+be more finicky to train than a01_nafnet_unet or a02_restormer_lite, and to cost
 more FLOPs at inference (T forward passes instead of 1) for a potential
 perceptual-quality benefit. Compare all four in results/ before deciding
 which one to submit.
@@ -217,7 +217,7 @@ class TinyDDPMBundle:
             self.optimizer, T_max=cfg["train"]["epochs"],
             eta_min=cfg["train"].get("lr_min", 1e-6),
         )
-        print(f"[tiny_ddpm_sr3] Model parameters: {count_parameters(self.model):,}, T={self.T}")
+        print(f"[a04_tiny_ddpm_sr3] Model parameters: {count_parameters(self.model):,}, T={self.T}")
 
     def train_step(self, corrupted, clean):
         self.model.train()
