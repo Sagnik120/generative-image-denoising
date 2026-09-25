@@ -1,8 +1,8 @@
 # Config for the Tiny Conditional Diffusion (SR3-style, few-step) architecture.
 # WARNING: true inference FLOPs = (per-step FLOPs) x timesteps. Keep `timesteps`
 # small and `width` modest to stay competitive on the FLOPs axis -- see
-# docs/tiny_ddpm_sr3/notes.md.
-architecture: tiny_ddpm_sr3
+# docs/a04_tiny_ddpm_sr3/notes.md.
+architecture: a04_tiny_ddpm_sr3
 
 model:
   timesteps: 8                   # T -- number of diffusion steps (both train + inference)
