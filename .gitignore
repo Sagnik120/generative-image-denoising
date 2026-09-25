@@ -32,3 +32,7 @@ env/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
+
+# Local run artefacts
+results/_dry_run/
+.run.lock
