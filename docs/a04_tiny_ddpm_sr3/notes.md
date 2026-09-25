@@ -1,4 +1,4 @@
-# tiny_ddpm_sr3 — Architecture Notes
+# a04_tiny_ddpm_sr3 — Architecture Notes
 
 ## Source
 Ho, J., Jain, A., & Abbeel, P. (2020). *Denoising Diffusion Probabilistic
@@ -58,7 +58,7 @@ against the other three (single-forward-pass) architectures.
 - `timesteps` (T): fewer steps = cheaper inference but less refinement;
   more steps = better potential quality but `T x` the FLOPs. Start at 8,
   try 4 (cheaper) or 16 (higher quality, watch FLOPs) if time allows.
-- `width` / block counts: keep these SMALLER than `nafnet_unet`'s
+- `width` / block counts: keep these SMALLER than `a01_nafnet_unet`'s
   equivalents by default, since every extra parameter here gets "paid for"
   T times at inference.
 
