@@ -19,26 +19,36 @@ import torch
 from src.registry import ARCHITECTURES, build_bundle, default_config_path
 from src.common.utils import load_yaml, set_seed
 from src.common.metrics import evaluate_batch, compute_flops_and_params
-from src.common.degradations import RandomDegradation, ALL_FNS
+from src.common.degradations import (RandomDegradation, FAMILIES, TRAIN_FAMILIES,
+                                     NUM_TRAIN_FAMILIES, apply_recipe)
 import numpy as np
 
 
 def test_degradations():
     print("\n=== Testing degradation pipeline ===")
-    img = np.random.rand(64, 64, 3).astype(np.float32)
-    deg = RandomDegradation(min_ops=1, max_ops=3)
-    for i in range(5):
-        out = deg(img)
-        assert out.shape == img.shape, f"shape mismatch: {out.shape} vs {img.shape}"
-        assert out.dtype == np.float32
-        assert out.min() >= 0.0 and out.max() <= 1.0
-    print(f"  All {len(ALL_FNS)} individual degradation functions + RandomDegradation OK.")
+    rng = np.random.default_rng(0)
+    img = rng.random((64, 64, 3)).astype(np.float32)
+    for name, (fn, _, _) in FAMILIES.items():
+        for s in (0.0, 0.5, 1.0):
+            out = fn(img.copy(), s, rng)
+            assert out.shape == img.shape and out.dtype == np.float32, name
+            assert out.min() >= 0.0 and out.max() <= 1.0 and np.isfinite(out).all(), name
+    print(f"  All {len(FAMILIES)} degradation families valid at severity 0 / 0.5 / 1.")
 
-    for fn in ALL_FNS:
-        out = fn(img.copy())
-        assert out.shape == img.shape
-        assert out.min() >= 0.0 and out.max() <= 1.0
-    print("  Each individual degradation function verified independently. PASS")
+    deg = RandomDegradation()
+    lengths = set()
+    for _ in range(200):
+        recipe = deg.sample_recipe(rng)
+        lengths.add(len(recipe))
+        assert all(name in TRAIN_FAMILIES for name, _ in recipe), "unseen family leaked into training"
+        out, label = deg(img, rng, return_label=True)
+        assert out.shape == img.shape and label.shape == (NUM_TRAIN_FAMILIES,)
+        assert np.allclose(out * 255, np.round(out * 255), atol=1e-3), "output not on the uint8 grid"
+    assert lengths == {0, 1, 2, 3, 4}, f"chain lengths seen: {lengths}"
+    a = apply_recipe(img, [("gaussian_noise", 0.5), ("jpeg", 0.5)], np.random.default_rng(1))
+    b = apply_recipe(img, [("gaussian_noise", 0.5), ("jpeg", 0.5)], np.random.default_rng(1))
+    assert np.array_equal(a, b), "same seed must give the same corruption"
+    print("  Random chains of 0-4 families, labels, uint8 quantisation, determinism. PASS")
 
 
 def test_architecture(arch_name, batch_size=2, patch_size=64):
@@ -47,6 +57,9 @@ def test_architecture(arch_name, batch_size=2, patch_size=64):
     # Shrink model + use small patch size for a fast CPU smoke test.
     cfg["train"]["epochs"] = 1
     cfg["data"]["patch_size"] = patch_size
+    cfg["data"]["steps_per_epoch"] = 4
+    if isinstance(cfg["train"].get("loss"), dict):
+        cfg["train"]["loss"]["dists_start_frac"] = 0.0   # exercise the DISTS loss too
 
     device = torch.device("cpu")
     set_seed(0)
@@ -55,10 +68,14 @@ def test_architecture(arch_name, batch_size=2, patch_size=64):
     corrupted = torch.rand(batch_size, 3, patch_size, patch_size)
     clean = torch.rand(batch_size, 3, patch_size, patch_size)
 
-    # train_step
-    losses = bundle.train_step(corrupted, clean)
-    assert "loss" in losses and np.isfinite(losses["loss"]), f"bad train loss: {losses}"
-    print(f"  train_step OK -> {losses}")
+    # train_step (twice: the second step runs on updated weights)
+    for _ in range(2):
+        if getattr(bundle, "uses_labels", False):
+            losses = bundle.train_step(corrupted, clean, torch.rand(batch_size, NUM_TRAIN_FAMILIES))
+        else:
+            losses = bundle.train_step(corrupted, clean)
+        assert "loss" in losses and np.isfinite(losses["loss"]), f"bad train loss: {losses}"
+    print(f"  train_step OK -> { {k: round(v, 4) for k, v in losses.items()} }")
 
     # eval_step
     pred, eval_losses = bundle.eval_step(corrupted, clean)
@@ -87,6 +104,12 @@ def test_architecture(arch_name, batch_size=2, patch_size=64):
     print(f"  FLOPs @ 256x256 OK -> {flop_info['gflops']:.3f} GFLOPs, "
           f"{flop_info['params']:,} params")
 
+    # the inference model must map a full-size image to the same shape
+    with torch.no_grad():
+        full = bundle.get_inference_model()(torch.rand(1, 3, 256, 256))
+    if arch_name != "a04_tiny_ddpm_sr3":      # a04's wrapper is a FLOPs-counting stub
+        assert full.shape == (1, 3, 256, 256) and torch.isfinite(full).all()
+
     print(f"  >>> {arch_name}: ALL CHECKS PASSED")
     return True
 
@@ -95,7 +118,10 @@ def main():
     test_degradations()
 
     results = {}
+    only = sys.argv[1:]
     for arch_name in ARCHITECTURES:
+        if only and arch_name not in only:
+            continue
         try:
             test_architecture(arch_name)
             results[arch_name] = "PASS"
@@ -108,7 +134,7 @@ def main():
     print("SUMMARY")
     print("=" * 50)
     for arch, status in results.items():
-        print(f"  {arch:20s} {status}")
+        print(f"  {arch:26s} {status}")
 
     if any(v == "FAIL" for v in results.values()):
         sys.exit(1)
