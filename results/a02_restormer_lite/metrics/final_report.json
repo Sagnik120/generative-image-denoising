@@ -1,0 +1,51 @@
+{
+  "architecture": "restormer_lite",
+  "best_composite_score": 2.2799829771539697,
+  "flops_per_forward_call": 11286872064.0,
+  "gflops_per_forward_call": 11.286872064,
+  "inference_forward_passes": 1,
+  "true_total_gflops_at_inference": 11.286872064,
+  "params": 2982579,
+  "config": {
+    "architecture": "restormer_lite",
+    "model": {
+      "width": 24,
+      "enc_blocks": [
+        2,
+        3,
+        3
+      ],
+      "middle_blocks": 4,
+      "dec_blocks": [
+        3,
+        3,
+        2
+      ],
+      "num_heads": [
+        1,
+        2,
+        4
+      ],
+      "predict_residual": true
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 6,
+      "num_workers": 2,
+      "val_fraction": 0.03,
+      "download_bsds": true,
+      "min_degrade_ops": 1,
+      "max_degrade_ops": 3
+    },
+    "train": {
+      "epochs": 60,
+      "lr": 0.0003,
+      "lr_min": 1e-06,
+      "weight_decay": 0.0001,
+      "loss": "charbonnier",
+      "visualize_every": 2,
+      "checkpoint_every": 1,
+      "seed": 42
+    }
+  }
+}
