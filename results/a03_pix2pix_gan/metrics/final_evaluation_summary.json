@@ -1,0 +1,11 @@
+{
+  "architecture": "pix2pix_gan",
+  "checkpoint": "/home/m25cse030/genai_project/generative-image-denoising/results/pix2pix_gan/checkpoints/best_model.pt",
+  "final_val_loss": 0.04250326680560266,
+  "final_val_psnr": 26.538806776276093,
+  "final_val_ssim": 0.7200009334433081,
+  "final_val_dists": 0.24601621973899104,
+  "flops": 12821712896.0,
+  "gflops": 12.821712896,
+  "params": 14344483
+}

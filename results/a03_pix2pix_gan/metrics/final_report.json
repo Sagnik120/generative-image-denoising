@@ -1,0 +1,50 @@
+{
+  "architecture": "pix2pix_gan",
+  "best_composite_score": 2.1891894969133237,
+  "flops_per_forward_call": 12821712896.0,
+  "gflops_per_forward_call": 12.821712896,
+  "inference_forward_passes": 1,
+  "true_total_gflops_at_inference": 12.821712896,
+  "params": 14344483,
+  "config": {
+    "architecture": "pix2pix_gan",
+    "model": {
+      "width": 32,
+      "enc_blocks": [
+        2,
+        2,
+        4,
+        8
+      ],
+      "middle_blocks": 4,
+      "dec_blocks": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "predict_residual": true,
+      "disc_base_ch": 64,
+      "disc_layers": 3
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 8,
+      "num_workers": 2,
+      "val_fraction": 0.03,
+      "download_bsds": true,
+      "min_degrade_ops": 1,
+      "max_degrade_ops": 3
+    },
+    "train": {
+      "epochs": 60,
+      "lr_g": 0.0002,
+      "lr_d": 0.0002,
+      "loss": "l1",
+      "lambda_recon": 100.0,
+      "visualize_every": 2,
+      "checkpoint_every": 1,
+      "seed": 42
+    }
+  }
+}
