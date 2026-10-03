@@ -1,0 +1,5 @@
+architecture,PSNR rank,SSIM rank,DISTS rank,GFLOPs rank,avg_rank
+restormer_lite,1.0,1.0,2.0,2.0,1.5
+nafnet_unet,2.0,2.0,1.0,3.5,2.125
+pix2pix_gan,3.0,3.0,3.0,3.5,3.125
+tiny_ddpm_sr3,4.0,4.0,4.0,1.0,3.25
