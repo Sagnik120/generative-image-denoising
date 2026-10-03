@@ -1,0 +1,39 @@
+# Config for a10_resflow_fewstep. See docs/a10_resflow_fewstep/notes.md for the design.
+architecture: a10_resflow_fewstep
+
+model:
+  steps: 2                       # passes per inference call (all counted in FLOPs)
+  width: 20
+  enc_blocks: [1, 1, 2, 2]
+  middle_blocks: 2
+  dec_blocks: [1, 1, 1, 1]
+  time_dim: 64
+
+data:
+  patch_size: 256
+  batch_size: 16
+  val_batch_size: 16
+  num_workers: 8
+  steps_per_epoch: 2500          # an "epoch" is this many steps; validation runs after each
+
+train:
+  epochs: 24                     # x 2500 steps = 60,000 steps
+  lr: 0.0004
+  lr_min: 0.000001
+  warmup_steps: 1000
+  weight_decay: 0.0001
+  amp: true                      # mixed precision (CUDA only)
+  ema_decay: 0.999
+  grad_clip: 1.0
+  self_pred_prob: 0.5            # share of batches trained on the model's own first-step output
+  loss:                          # one term per scored metric
+    charbonnier: 1.0             # -> PSNR
+    fft: 0.05
+    ssim: 0.2                    # -> SSIM (same window as skimage)
+    dists: 0.1                   # -> DISTS, switched on after dists_start_frac of training
+    dists_start_frac: 0.5
+    dists_batch: 4               # images per batch the DISTS term is computed on
+  visualize_every: 4
+  checkpoint_every: 1
+  log_every: 250                 # steps between progress lines in the log
+  seed: 42

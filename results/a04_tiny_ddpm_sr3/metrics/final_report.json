@@ -1,0 +1,47 @@
+{
+  "architecture": "tiny_ddpm_sr3",
+  "best_composite_score": 0.8144937319532952,
+  "flops_per_forward_call": 4666774784.0,
+  "gflops_per_forward_call": 4.666774784,
+  "inference_forward_passes": 8,
+  "true_total_gflops_at_inference": 37.334198272,
+  "params": 1988451,
+  "config": {
+    "architecture": "tiny_ddpm_sr3",
+    "model": {
+      "timesteps": 8,
+      "width": 24,
+      "enc_blocks": [
+        2,
+        2,
+        3
+      ],
+      "middle_blocks": 3,
+      "dec_blocks": [
+        3,
+        2,
+        2
+      ],
+      "time_emb_dim": 128
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 6,
+      "num_workers": 2,
+      "val_fraction": 0.03,
+      "download_bsds": true,
+      "min_degrade_ops": 1,
+      "max_degrade_ops": 3
+    },
+    "train": {
+      "epochs": 80,
+      "lr": 0.0002,
+      "lr_min": 1e-06,
+      "weight_decay": 0.0001,
+      "loss": "l2",
+      "visualize_every": 4,
+      "checkpoint_every": 1,
+      "seed": 42
+    }
+  }
+}

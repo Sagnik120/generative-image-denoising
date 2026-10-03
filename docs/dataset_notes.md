@@ -1,83 +1,85 @@
-# Dataset Notes
+# Dataset, Degradation and Benchmark Notes
 
-## What's used by default and why
+## Why round 1's data was not enough
+Round 1 intended DIV2K + BSDS500, but the BSDS500 URL had gone dead and the
+code fell back to DIV2K alone with only a warning. All four models were
+therefore trained on 800 daylight photographs, cropped at native 2K zoom,
+while the test set is whole images shown at 256x256 from three domains.
+Round 2 fixes the content, the scale and the silent fallback.
 
-| Dataset | Size | Why it was chosen |
-|---|---|---|
-| **DIV2K_train_HR** | 800 images, 2K resolution | The standard modern benchmark for image restoration training. High resolution means many distinct 256x256 crops per image, and content is broad (people, architecture, nature, animals, text, textures) -- important since the corruption pipeline is randomized on-the-fly, so more distinct source pixels = more effective training variety. |
-| **DIV2K_valid_HR** | 100 images | Used as a natural-image validation split -- these images are never seen during training, giving a clean estimate of generalization even within the natural-photo domain. |
-| **BSDS500** | ~500 images | Classic restoration/segmentation benchmark with different photographic style and content distribution than DIV2K (more classic photography compositions, different camera characteristics) -- adds scene diversity cheaply (~70MB). |
+## Sources (all fetched by `scripts/prepare_data.py`, ~30 GB)
 
-Together these give roughly **1,300+ diverse natural images**, all
-license-appropriate for research/competition use (both are standard,
-widely-used research benchmark datasets, satisfying the brief's Section
-3.1 requirement).
+| Domain | Source | Size | Used for |
+|---|---|---|---|
+| Natural | DIV2K train (800 images, 2K) | 3.5 GB | training |
+| Natural | Flickr2K (2,650 images, 2K) | 11.6 GB | training |
+| Natural | BSDS500 (300 train+val / 200 test) | 0.2 GB | training / benchmark |
+| Natural | COCO test2017 (~40k everyday scenes) | 6.6 GB | training |
+| Natural | DIV2K valid (100), COCO val2017 (300 used) | 1.3 GB | benchmark only |
+| Low-light | LOL (485 train / 15 eval pairs) | 0.35 GB | training / benchmark |
+| X-ray | NIH ChestX-ray, first archive (~5,000 images) | 2.0 GB | training (last 80 held out) |
+| MRI | IXI T2 brain volumes (~580 subjects) | 3.9 GB | training (last 30 subjects held out) |
+| CT | MedMNIST OrganC, 224 px | 0.8 GB | training / benchmark |
+| Ultrasound | MedMNIST Breast, 224 px | 0.03 GB | training / benchmark |
 
-Both are downloaded via direct, stable institutional URLs (ETH Zürich's
-Computer Vision Lab for DIV2K, UC Berkeley's Computer Vision group for
-BSDS500) and cached locally after the first download -- see
-`src/common/dataset.py::ensure_datasets()`.
+Every source has its mirrors listed in `src/common/dataset.py::SOURCES`;
+downloads resume, each mirror is tried in turn, and `manifest.json` records
+the item count of every source. Training refuses to start while any training
+view is missing. Check each dataset's licence terms against the brief's
+Section 3.1 before submitting; all are public research datasets.
 
-## Why this combination, specifically, for THIS competition
+## How they are combined
+Sources are **sampled by weight**, not concatenated, so 40k COCO images
+cannot drown out 600 ultrasound images. Weights are in
+`src/common/dataset.py::TRAIN_VIEWS`; roughly 70% natural, 20% medical, and
+about 13% low-light (LOL plus natural photos darkened synthetically).
 
-The held-out evaluation set (brief Section 4) spans three things at once:
-1. **Diverse degradation types and severities** (some undisclosed) →
-   addressed by the **randomized on-the-fly degradation pipeline**
-   (`src/common/degradations.py`), not by the dataset choice itself. See
-   that file's docstring for the reasoning (based on the literature
-   review's GenDeg discussion): broaden and randomize corruptions rather
-   than fix a small preset list.
-2. **Diverse image content** (natural photography) → addressed by
-   DIV2K + BSDS500's combined ~1,300 images spanning many scene types.
-3. **Diverse *domains*** (natural / low-light / medical) → **only
-   partially** addressed by DIV2K/BSDS500 alone, since both are natural
-   daylight photography. See the extension section below.
+Each training sample is produced as follows:
+1. Pick a view by weight, then an image from it.
+2. Shrink it so its short side is close to 256, then take a random 256 crop.
+   The test set is whole images at 256x256, so most samples are whole-scene
+   views; only the `natural_tiles` view keeps native 2K detail.
+3. Random flips and rotations; 4% of natural samples are converted to
+   greyscale, 10% are darkened into low-light images.
+4. Apply a random degradation chain (below) and snap the result to uint8.
 
-## Extending to low-light and medical domains (recommended, optional)
+2K photographs are converted once into a 512 px whole view plus native
+512 px tiles, MRI volumes into slices, so training never decodes a 2K image
+to take one crop.
 
-The brief's Section 4 explicitly states the held-out set includes
-low-light imagery and medical imaging (X-ray, MRI). Since DIV2K/BSDS500
-alone are natural daylight photos, adding even a modest slice of these
-other domains to your training data is likely to measurably help
-cross-domain transfer (this is a "domain generalization via broad
-training data" strategy, not test-time domain adaptation -- see the
-competition-clarification discussion in the project's parent conversation
-for why domain *adaptation* isn't applicable here).
+## Degradations (`src/common/degradations.py`)
+- **Listed families** (the brief's nine): Gaussian, Poisson, salt-and-pepper
+  and speckle noise; Gaussian, motion and defocus blur; JPEG; chromatic
+  aberration.
+- **Extra families** also trained on: spatially correlated noise,
+  random-valued impulses, Rician noise, stripes/banding, resize blur, WebP,
+  posterisation, and scratches / dead pixels / small blocks.
+- **Unseen families**, never trained on, used only by the benchmark:
+  uniform noise, nearest-neighbour pixelation, periodic interference.
 
-**How to add extra domains:**
-1. Collect a modest number of license-appropriate images (a few hundred
-   is enough to help; you don't need thousands) for each extra domain you
-   want to cover. Good starting points:
-   - **Low-light**: the LOL (Low-Light) dataset is the standard academic
-     benchmark for this; search "LOL dataset low-light image enhancement"
-     for current mirror links, since hosting has moved over time. Any
-     Creative-Commons low-light photo collection also works.
-   - **Medical (X-ray)**: NIH's publicly released Chest X-ray datasets
-     (e.g. via Kaggle, search "NIH Chest X-ray dataset") are a common,
-     clearly-licensed starting point.
-   - **Medical (MRI)**: several open MRI datasets exist on Kaggle /
-     academic mirrors (search "brain MRI dataset public domain") -- pick
-     one with an explicit open license.
-2. Place the images at:
-   ```
-   <DATA_ROOT>/extra/<domain_name>/*.png   (or .jpg)
-   ```
-   e.g. `data/extra/lowlight/*.png`, `data/extra/chest_xray/*.png`.
-3. Re-run `ensure_datasets()` (or just re-run the training notebook) --
-   it automatically detects any folders under `extra/` and includes them
-   in the training pool. No code changes needed.
+Each sample gets a chain of 0, 1, 2, 3 or 4 families (about 3 / 34 / 39 /
+19 / 5 %), each with a continuous severity. Chains are applied in physical
+order (optics, blur, noise, compression) with 20% shuffled. Longer chains
+draw gentler individual severities so a four-family mix is still
+restorable. Three quarters of the draws come from the listed families.
+Brightness/contrast change is deliberately not a degradation: the model
+cannot know the original exposure, so "undoing" it only costs PSNR.
 
-This step is **entirely optional** -- the pipeline trains and evaluates
-correctly without it, using DIV2K + BSDS500 alone. Adding extra domains is
-a lever to pull if you have time and want to push cross-domain
-generalization further, not a requirement to get a working submission.
+## The fixed benchmark
+`prepare_data.py` builds it once under `<data_root>/benchmark/v1/`: 33 cases
+x 12 held-out images (6 natural, 3 low-light, 3 medical) = 396 pairs, each
+with its corruption generated once and saved to disk.
 
-## A note on patch cropping and content diversity
+| Group | Cases |
+|---|---|
+| single | each of the nine listed families |
+| extra | correlated noise, resize blur, small artifacts |
+| pair | twelve combinations (blur+noise, noise+JPEG, blur+JPEG, ...) |
+| triple | five combinations (blur+noise+JPEG, ...) |
+| unseen | three families never trained on, and one mix of two of them |
 
-`DenoisingDataset` (in `src/common/dataset.py`) takes a random 256x256
-crop from each source image on every access, with random flips/rotations
-applied too. Since DIV2K images are ~2K resolution, this means a single
-epoch sees a different crop of each image than the epoch before -- this
-is a cheap form of data augmentation that multiplies the effective
-dataset size well beyond the raw ~1,300 image count, without needing more
-storage or download.
+Every architecture is validated on these same 396 pairs after every epoch,
+and `scripts/evaluate.py` reports PSNR / SSIM / DISTS overall and per group,
+domain and case. Round 1 re-randomised its validation images every epoch,
+which moved PSNR by about 1 dB between epochs and made its comparison
+unreliable.

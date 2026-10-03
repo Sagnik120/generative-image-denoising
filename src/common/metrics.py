@@ -57,40 +57,71 @@ def compute_ssim(pred_uint8: np.ndarray, target_uint8: np.ndarray) -> float:
 
 
 @torch.no_grad()
-def compute_dists_batch(pred_batch: torch.Tensor, target_batch: torch.Tensor, device) -> float:
-    """pred_batch/target_batch: (B, C, H, W) float in [0, 1]."""
+def compute_dists_per_image(pred_batch: torch.Tensor, target_batch: torch.Tensor, device) -> list:
+    """pred_batch/target_batch: (B, C, H, W) float in [0, 1]. One DISTS value per image."""
     model = _get_dists_model(device)
     if model is False:
-        return float("nan")
-    pred_batch = pred_batch.to(device)
-    target_batch = target_batch.to(device)
-    score = model(pred_batch, target_batch)
-    return float(score.mean().item())
+        return [float("nan")] * pred_batch.shape[0]
+    score = model(pred_batch.to(device).float(), target_batch.to(device).float())
+    return [float(v) for v in score.reshape(-1).tolist()]
 
 
 @torch.no_grad()
-def evaluate_batch(pred_batch: torch.Tensor, target_batch: torch.Tensor, device):
+def evaluate_batch_per_image(pred_batch: torch.Tensor, target_batch: torch.Tensor, device):
     """
-    Computes PSNR/SSIM per-image (matching the brief's per-image uint8
-    protocol) and DISTS on the whole batch (DISTS expects [0,1] float
-    tensors, no uint8 round-trip needed since we don't quantize for it).
-    Returns a dict of mean values across the batch.
+    PSNR / SSIM / DISTS for every image of the batch, following the brief's
+    protocol: all three are computed on the uint8 [0, 255] images (DISTS on
+    the uint8 image rescaled to [0, 1]). Returns a dict of lists.
     """
-    b = pred_batch.shape[0]
     psnrs, ssims = [], []
-    for i in range(b):
+    for i in range(pred_batch.shape[0]):
         pred_u8 = tensor_to_uint8(pred_batch[i])
         tgt_u8 = tensor_to_uint8(target_batch[i])
         psnrs.append(compute_psnr(pred_u8, tgt_u8))
         ssims.append(compute_ssim(pred_u8, tgt_u8))
+    quantise = lambda t: (t.detach().clamp(0, 1) * 255.0).round() / 255.0
+    dists = compute_dists_per_image(quantise(pred_batch), quantise(target_batch), device)
+    return {"psnr": psnrs, "ssim": ssims, "dists": dists}
 
-    dists_val = compute_dists_batch(pred_batch, target_batch, device)
 
+@torch.no_grad()
+def evaluate_batch(pred_batch: torch.Tensor, target_batch: torch.Tensor, device):
+    """Batch means of `evaluate_batch_per_image` (NaN DISTS values are ignored)."""
+    m = evaluate_batch_per_image(pred_batch, target_batch, device)
+    dists = [d for d in m["dists"] if d == d]
     return {
-        "psnr": float(np.mean(psnrs)),
-        "ssim": float(np.mean(ssims)),
-        "dists": dists_val,
+        "psnr": float(np.mean(m["psnr"])),
+        "ssim": float(np.mean(m["ssim"])),
+        "dists": float(np.mean(dists)) if dists else float("nan"),
     }
+
+
+def summarize_benchmark(records: list, meta: list) -> dict:
+    """
+    Groups per-image benchmark results. `records[i]` = {"psnr", "ssim", "dists"}
+    for benchmark image i, `meta[i]` its description (src/common/dataset.py).
+    Returns the overall means plus means by group (single / pair / triple /
+    extra / unseen), by domain and by individual case -- the table that shows
+    WHICH degradations and combinations a model handles or fails on.
+    """
+    def mean_of(idx):
+        out = {"n": len(idx)}
+        for key in ("psnr", "ssim", "dists"):
+            vals = [records[i][key] for i in idx if records[i][key] == records[i][key]]
+            out[key] = round(float(np.mean(vals)), 4) if vals else float("nan")
+        out["input_psnr"] = round(float(np.mean([meta[i]["input_psnr"] for i in idx])), 3)
+        return out
+
+    n = min(len(records), len(meta))
+    summary = {"overall": mean_of(list(range(n)))}
+    for field in ("group", "domain", "case"):
+        keys = []
+        for i in range(n):
+            if meta[i][field] not in keys:
+                keys.append(meta[i][field])
+        summary[f"by_{field}"] = {k: mean_of([i for i in range(n) if meta[i][field] == k])
+                                  for k in keys}
+    return summary
 
 
 def compute_flops_and_params(model, input_size=(1, 3, 256, 256), device="cpu"):
@@ -100,8 +131,11 @@ def compute_flops_and_params(model, input_size=(1, 3, 256, 256), device="cpu"):
     fvcore first (used as the brief's reference implementation), falls
     back to ptflops if fvcore is unavailable.
     """
-    model = model.to(device).eval()
-    dummy = torch.randn(*input_size, device=device)
+    # Counted on a CPU copy: the count does not depend on the device, and this
+    # leaves the live training model (and its GPU memory) untouched.
+    import copy
+    model = copy.deepcopy(model).to("cpu").float().eval()
+    dummy = torch.randn(*input_size)
 
     try:
         from fvcore.nn import FlopCountAnalysis, parameter_count

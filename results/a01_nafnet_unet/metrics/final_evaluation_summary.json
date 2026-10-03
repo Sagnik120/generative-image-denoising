@@ -1,0 +1,11 @@
+{
+  "architecture": "nafnet_unet",
+  "checkpoint": "/home/m25cse030/genai_project/generative-image-denoising/results/nafnet_unet/checkpoints/best_model.pt",
+  "final_val_loss": 0.0394294310000635,
+  "final_val_psnr": 27.324710530379132,
+  "final_val_ssim": 0.7521743592403919,
+  "final_val_dists": 0.22802716493606567,
+  "flops": 12821712896.0,
+  "gflops": 12.821712896,
+  "params": 14344483
+}

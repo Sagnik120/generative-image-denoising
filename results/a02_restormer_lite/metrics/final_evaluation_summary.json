@@ -1,0 +1,11 @@
+{
+  "architecture": "restormer_lite",
+  "checkpoint": "/home/m25cse030/genai_project/generative-image-denoising/results/restormer_lite/checkpoints/best_model.pt",
+  "final_val_loss": 0.0403554807567308,
+  "final_val_psnr": 27.441694019854413,
+  "final_val_ssim": 0.7578957954061741,
+  "final_val_dists": 0.23523797479368025,
+  "flops": 11286872064.0,
+  "gflops": 11.286872064,
+  "params": 2982579
+}
