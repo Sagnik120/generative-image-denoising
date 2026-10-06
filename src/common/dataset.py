@@ -55,7 +55,8 @@ SOURCES = {
     "div2k_train": {"gb": 3.5, "min_items": 800, "mirrors": [
         ("https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_train_HR.zip", "DIV2K_train_HR.zip")]},
     "div2k_valid": {"gb": 0.45, "min_items": 100, "mirrors": [
-        ("https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_valid_HR.zip", "DIV2K_valid_HR.zip")]},
+        ("https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_valid_HR.zip", "DIV2K_valid_HR.zip"),
+        ("https://huggingface.co/datasets/eugenesiow/Div2k/resolve/main/data/DIV2K_valid_HR.zip", "DIV2K_valid_HR.zip")]},
     "flickr2k": {"gb": 11.6, "min_items": 2600, "mirrors": [
         ("https://huggingface.co/datasets/yangtao9009/Flickr2K/resolve/main/Flickr2K.zip", "Flickr2K.zip"),
         ("https://cv.snu.ac.kr/research/EDSR/Flickr2K.tar", "Flickr2K.tar")]},
