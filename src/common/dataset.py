@@ -54,9 +54,6 @@ BENCHMARK_VERSION = "v1"
 SOURCES = {
     "div2k_train": {"gb": 3.5, "min_items": 800, "mirrors": [
         ("https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_train_HR.zip", "DIV2K_train_HR.zip")]},
-    "div2k_valid": {"gb": 0.45, "min_items": 100, "mirrors": [
-        ("https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_valid_HR.zip", "DIV2K_valid_HR.zip"),
-        ("https://huggingface.co/datasets/eugenesiow/Div2k/resolve/main/data/DIV2K_valid_HR.zip", "DIV2K_valid_HR.zip")]},
     "flickr2k": {"gb": 11.6, "min_items": 2600, "mirrors": [
         ("https://huggingface.co/datasets/yangtao9009/Flickr2K/resolve/main/Flickr2K.zip", "Flickr2K.zip"),
         ("https://cv.snu.ac.kr/research/EDSR/Flickr2K.tar", "Flickr2K.tar")]},
@@ -95,13 +92,12 @@ TRAIN_VIEWS = {
     "ct":              (0.03, (256, 300), "medical"),
     "ultrasound":      (0.02, (256, 300), "medical"),
 }
-HOLDOUT_VIEWS = ["hold_div2k", "hold_bsds", "hold_coco", "hold_lol_high", "hold_lol_low",
+HOLDOUT_VIEWS = ["hold_bsds", "hold_coco", "hold_lol_high", "hold_lol_low",
                  "hold_xray", "hold_mri", "hold_ct", "hold_ultrasound"]
 # which source produces which views
 SOURCE_VIEWS = {
     "div2k_train": ["natural_whole:div2k", "natural_tiles:div2k"],
     "flickr2k": ["natural_whole:flickr2k", "natural_tiles:flickr2k"],
-    "div2k_valid": ["hold_div2k"],
     "bsds500": ["bsds", "hold_bsds"],
     "coco_test2017": ["coco"],
     "coco_val2017": ["hold_coco"],
@@ -560,7 +556,7 @@ def build_benchmark(data_root, per_case=(6, 3, 3), seed: int = 2026, force: bool
                     out.append(l.pop())
         return out
 
-    natural = interleave(hold["hold_div2k"], hold["hold_bsds"], hold["hold_coco"])
+    natural = interleave(hold.get("hold_div2k", []), hold.get("hold_bsds", []), hold.get("hold_coco", []))
     medical = interleave(hold["hold_xray"], hold["hold_mri"], hold["hold_ct"], hold["hold_ultrasound"])
     n_nat, n_low, n_med = per_case
     need_nat = len(BENCHMARK_CASES) * n_nat
