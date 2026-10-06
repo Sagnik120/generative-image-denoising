@@ -163,11 +163,11 @@ def main():
     args = p.parse_args()
 
     # 1. data first: fail here, in seconds, rather than on the GPU.
-    from src.common.dataset import check_training_data, benchmark_dir, load_manifest
+    from src.common.dataset import check_training_data, benchmark_dir, load_manifest, SOURCES
     views = check_training_data(args.data_root)
     if not (benchmark_dir(args.data_root) / "meta.json").exists():
         raise SystemExit(f"[run_all] benchmark missing; run scripts/prepare_data.py --data_root {args.data_root}")
-    bad = [k for k, v in load_manifest(args.data_root)["sources"].items() if not v.get("ok")]
+    bad = [k for k, v in load_manifest(args.data_root)["sources"].items() if not v.get("ok") and k in SOURCES]
     if bad:
         raise SystemExit(f"[run_all] datasets not ready: {bad}; re-run scripts/prepare_data.py")
     log("data OK: " + ", ".join(f"{k}={len(v)}" for k, v in views.items()))
