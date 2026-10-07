@@ -173,8 +173,8 @@ def main():
     log("data OK: " + ", ".join(f"{k}={len(v)}" for k, v in views.items()))
 
     # 2. download the DISTS backbone once, so parallel runs do not race on it.
-    subprocess.call([sys.executable, "-c", "from DISTS_pytorch import DISTS; DISTS()"],
-                    cwd=str(PROJECT_ROOT))
+    subprocess.check_call([sys.executable, "-c", "from DISTS_pytorch import DISTS; DISTS()"],
+                          cwd=str(PROJECT_ROOT))
 
     # 3. queue
     todo = []
