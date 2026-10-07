@@ -153,5 +153,9 @@ class RestorationBundle:
         if "optimizer" in state:
             self.optimizer.load_state_dict(state["optimizer"])
         if "scaler" in state and self.use_amp:
-            self.scaler.load_state_dict(state["scaler"])
+            try:
+                self.scaler.load_state_dict(state["scaler"])
+            except RuntimeError as e:
+                if "source state dict is empty" not in str(e):
+                    raise
         self.step = state.get("step", 0)
