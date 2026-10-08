@@ -1,0 +1,43 @@
+# Config for a16_naf_attn_degv2. See its model.py and docs/IMPLEMENTATION_PLAN.md.
+architecture: a16_naf_attn_degv2
+
+model:
+  width: 24
+  enc_blocks: [2, 2, 2, 4]       # NAFBlocks per encoder level, 256px -> 32px
+  middle_blocks: 3               # at 16px
+  dec_blocks: [1, 1, 1, 2]       # per decoder level, 32px -> 256px
+  global_attn: true              # spatial attention in the 16px bottleneck
+
+data:
+  patch_size: 256
+  batch_size: 16
+  val_batch_size: 16
+  num_workers: 8
+  steps_per_epoch: 2500          # an "epoch" is this many steps; validation runs after each
+  degradation:                   # the "v2" pipeline (src/common/degradations.py)
+    families: v2                 # also trains on pixelate, periodic, sensor noise, ringing, double JPEG
+    num_ops_probs: [0.08, 0.34, 0.36, 0.17, 0.05]   # more clean inputs (8% instead of 3%)
+    shuffle_prob: 0.5            # half the chains in random order
+    severity_beta: [1.0, 1.8]    # skewed towards mild corruptions
+    listed_weight: 0.65
+
+train:
+  epochs: 24                     # x 2500 steps = 60,000 steps
+  lr: 0.0004
+  lr_min: 0.000001
+  warmup_steps: 1000
+  weight_decay: 0.0001
+  amp: true                      # mixed precision (CUDA only)
+  ema_decay: 0.999
+  grad_clip: 1.0
+  loss:                          # one term per scored metric
+    charbonnier: 1.0             # -> PSNR
+    fft: 0.05
+    ssim: 0.2                    # -> SSIM (same window as skimage)
+    dists: 0.1                   # -> DISTS, switched on after dists_start_frac of training
+    dists_start_frac: 0.5
+    dists_batch: 4               # images per batch the DISTS term is computed on
+  visualize_every: 4
+  checkpoint_every: 1
+  log_every: 250                 # steps between progress lines in the log
+  seed: 42

@@ -35,13 +35,25 @@ ARCHITECTURES = {
     "a09_wavelet_naf": "src.architectures.a09_wavelet_naf.model",
     "a10_resflow_fewstep": "src.architectures.a10_resflow_fewstep.model",
     "a11_freq_spatial": "src.architectures.a11_freq_spatial.model",
+    # ---- round 3: single-change experiments on a05, then the final model ----
+    # (see docs/IMPLEMENTATION_PLAN.md; all are src/common/plannet.py::PlanNet)
+    "a12_naf_w16": "src.architectures.a12_naf_w16.model",
+    "a13_naf_w12": "src.architectures.a13_naf_w12.model",
+    "a14_wavelet_w28": "src.architectures.a14_wavelet_w28.model",
+    "a15_naf_degv2": "src.architectures.a15_naf_degv2.model",
+    "a16_naf_attn_degv2": "src.architectures.a16_naf_attn_degv2.model",
+    "a17_naf_dists0": "src.architectures.a17_naf_dists0.model",
+    "a18_naf_dists0_strong": "src.architectures.a18_naf_dists0_strong.model",
+    "a19_final": "src.architectures.a19_final.model",
 }
 
 # Architectures are numbered in the order they were added. Round 1 (a01-a04)
 # was trained on the original DIV2K-only pipeline with a different, noisy
 # validation set, so its numbers are NOT comparable with round 2 onward.
 ROUND1 = ["a01_nafnet_unet", "a02_restormer_lite", "a03_pix2pix_gan", "a04_tiny_ddpm_sr3"]
-ROUND2 = [name for name in ARCHITECTURES if name not in ROUND1]
+FINAL = "a19_final"              # its config.yaml is written by scripts/run_plan.py
+ROUND3 = [name for name in ARCHITECTURES if "a12" <= name[:3] <= "a18"]
+ROUND2 = [name for name in ARCHITECTURES if name not in ROUND1 + ROUND3 + [FINAL]]
 
 
 def get_architecture_module(name: str):

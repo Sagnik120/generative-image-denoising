@@ -1,0 +1,1 @@
+epoch,train_loss,val_loss,val_psnr,val_ssim,val_dists,gen_loss,disc_loss,lr,epoch_time_sec

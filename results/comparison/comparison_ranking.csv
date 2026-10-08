@@ -1,5 +1,8 @@
 architecture,PSNR rank,SSIM rank,DISTS rank,GFLOPs rank,avg_rank
-restormer_lite,1.0,1.0,2.0,2.0,1.5
-nafnet_unet,2.0,2.0,1.0,3.5,2.125
-pix2pix_gan,3.0,3.0,3.0,3.5,3.125
-tiny_ddpm_sr3,4.0,4.0,4.0,1.0,3.25
+a05_nafnet_v2,1.0,3.0,1.0,3.0,2.0
+a07_naf_attn_hybrid,3.0,1.0,3.0,2.0,2.25
+a11_freq_spatial,4.0,2.0,4.0,1.0,2.75
+a09_wavelet_naf,2.0,4.0,2.0,6.0,3.5
+a08_degradation_aware,5.0,5.0,5.0,4.0,4.75
+a06_restormer_v2,6.0,6.0,6.0,5.0,5.75
+a10_resflow_fewstep,7.0,7.0,7.0,7.0,7.0

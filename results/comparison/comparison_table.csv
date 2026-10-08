@@ -1,5 +1,8 @@
 architecture,PSNR (dB) [higher better],SSIM [higher better],DISTS [lower better],GFLOPs [lower better],Params (M)
-nafnet_unet,27.325,0.7522,0.228,12.822,14.34
-restormer_lite,27.442,0.7579,0.2352,11.287,2.98
-pix2pix_gan,26.539,0.72,0.246,12.822,14.34
-tiny_ddpm_sr3,10.01,0.0861,0.5223,4.667,1.99
+a05_nafnet_v2,31.924,0.855,0.1542,4.978,5.52
+a06_restormer_v2,31.682,0.852,0.1623,4.984,1.31
+a07_naf_attn_hybrid,31.854,0.8558,0.1563,4.928,4.02
+a08_degradation_aware,31.835,0.853,0.1612,4.982,4.23
+a09_wavelet_naf,31.891,0.8543,0.1545,5.018,6.44
+a10_resflow_fewstep,30.349,0.8238,0.1976,5.039,2.86
+a11_freq_spatial,31.838,0.8552,0.1572,4.884,5.27

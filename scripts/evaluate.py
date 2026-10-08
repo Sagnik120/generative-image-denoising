@@ -25,7 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.registry import build_bundle, default_config_path, ARCHITECTURES
 from src.common.utils import get_device, load_yaml, load_checkpoint, save_json, check_gpu
-from src.common.dataset import build_dataloaders
+from src.common.dataset import build_dataloaders, BenchmarkDataset, benchmark_dir
 from src.common.metrics import evaluate_batch_per_image, summarize_benchmark, compute_flops_and_params
 from src.common.utils import AverageMeter
 import torch
@@ -104,6 +104,12 @@ def main():
     print(f"[evaluate.py] Loaded checkpoint: {ckpt_path}")
 
     eval_results = run_full_evaluation(bundle, val_loader, device)
+    # Round 3: also score benchmark v2 (new unseen families) when it has been built.
+    if (benchmark_dir(args.data_root, "v2") / "meta.json").exists():
+        v2_loader = torch.utils.data.DataLoader(BenchmarkDataset(args.data_root, "v2"),
+                                                batch_size=val_loader.batch_size, shuffle=False,
+                                                num_workers=val_loader.num_workers)
+        eval_results["benchmark_v2"] = run_full_evaluation(bundle, v2_loader, device)["benchmark"]
     flop_info = compute_flops_and_params(bundle.get_inference_model(),
                                           input_size=(1, 3, 256, 256), device=device)
     # a04's counter sees one diffusion step; its real cost is `timesteps` passes.
@@ -119,9 +125,12 @@ def main():
     }
     save_json(summary, results_dir / "metrics" / "final_evaluation_summary.json")
     write_breakdown_csv(summary["benchmark"], results_dir / "metrics" / "benchmark_breakdown.csv")
+    if "benchmark_v2" in summary:
+        write_breakdown_csv(summary["benchmark_v2"],
+                            results_dir / "metrics" / "benchmark_v2_breakdown.csv")
     print("[evaluate.py] Final evaluation summary:")
     for k, v in summary.items():
-        if k != "benchmark":
+        if k not in ("benchmark", "benchmark_v2"):
             print(f"    {k}: {v}")
     for level in ("by_group", "by_domain"):
         print(f"    {level[3:]:7s} " + "  ".join(

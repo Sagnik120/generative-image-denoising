@@ -1,0 +1,63 @@
+{
+  "architecture": "a06_restormer_v2",
+  "best_composite_score": 2.4817492265163636,
+  "flops_per_forward_call": 4983521280.0,
+  "gflops_per_forward_call": 4.98352128,
+  "inference_forward_passes": 1,
+  "true_total_gflops_at_inference": 4.98352128,
+  "params": 1306833,
+  "config": {
+    "architecture": "a06_restormer_v2",
+    "model": {
+      "width": 20,
+      "enc_blocks": [
+        2,
+        2,
+        3
+      ],
+      "middle_blocks": 3,
+      "dec_blocks": [
+        1,
+        1,
+        2
+      ],
+      "num_heads": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "ffn_expand": 2.0,
+      "predict_residual": true
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 16,
+      "val_batch_size": 16,
+      "num_workers": 8,
+      "steps_per_epoch": 2500
+    },
+    "train": {
+      "epochs": 24,
+      "lr": 0.0004,
+      "lr_min": 1e-06,
+      "warmup_steps": 1000,
+      "weight_decay": 0.0001,
+      "amp": true,
+      "ema_decay": 0.999,
+      "grad_clip": 1.0,
+      "loss": {
+        "charbonnier": 1.0,
+        "fft": 0.05,
+        "ssim": 0.2,
+        "dists": 0.1,
+        "dists_start_frac": 0.5,
+        "dists_batch": 4
+      },
+      "visualize_every": 4,
+      "checkpoint_every": 1,
+      "log_every": 250,
+      "seed": 42
+    }
+  }
+}

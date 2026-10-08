@@ -79,6 +79,10 @@ def main():
 
     if not args.skip_benchmark and not args.only:
         build_benchmark(args.data_root, force=args.rebuild_benchmark)
+        # Round 3: second benchmark with new unseen families (same hold-out images, no download).
+        from src.common.degradations import BENCHMARK_CASES_V2
+        build_benchmark(args.data_root, force=args.rebuild_benchmark, seed=2027,
+                        version="v2", cases=BENCHMARK_CASES_V2)
     print("\n[prepare_data] DONE. Data is ready for training.")
 
 

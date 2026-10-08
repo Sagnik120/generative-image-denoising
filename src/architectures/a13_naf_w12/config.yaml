@@ -1,0 +1,36 @@
+# Config for a13_naf_w12. See its model.py and docs/IMPLEMENTATION_PLAN.md.
+architecture: a13_naf_w12
+
+model:
+  width: 12
+  enc_blocks: [2, 2, 2, 4]       # NAFBlocks per encoder level, 256px -> 32px
+  middle_blocks: 3               # at 16px
+  dec_blocks: [1, 1, 1, 2]       # per decoder level, 32px -> 256px
+
+data:
+  patch_size: 256
+  batch_size: 16
+  val_batch_size: 16
+  num_workers: 8
+  steps_per_epoch: 2500          # an "epoch" is this many steps; validation runs after each
+
+train:
+  epochs: 24                     # x 2500 steps = 60,000 steps
+  lr: 0.0004
+  lr_min: 0.000001
+  warmup_steps: 1000
+  weight_decay: 0.0001
+  amp: true                      # mixed precision (CUDA only)
+  ema_decay: 0.999
+  grad_clip: 1.0
+  loss:                          # one term per scored metric
+    charbonnier: 1.0             # -> PSNR
+    fft: 0.05
+    ssim: 0.2                    # -> SSIM (same window as skimage)
+    dists: 0.1                   # -> DISTS, switched on after dists_start_frac of training
+    dists_start_frac: 0.5
+    dists_batch: 4               # images per batch the DISTS term is computed on
+  visualize_every: 4
+  checkpoint_every: 1
+  log_every: 250                 # steps between progress lines in the log
+  seed: 42

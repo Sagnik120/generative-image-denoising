@@ -1,0 +1,64 @@
+{
+  "architecture": "a07_naf_attn_hybrid",
+  "best_composite_score": 2.495863167372212,
+  "flops_per_forward_call": 4927623168.0,
+  "gflops_per_forward_call": 4.927623168,
+  "inference_forward_passes": 1,
+  "true_total_gflops_at_inference": 4.927623168,
+  "params": 4024663,
+  "config": {
+    "architecture": "a07_naf_attn_hybrid",
+    "model": {
+      "widths": [
+        24,
+        48,
+        96,
+        192,
+        256
+      ],
+      "enc_blocks": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "middle_blocks": 3,
+      "dec_blocks": [
+        1,
+        1,
+        1,
+        2
+      ],
+      "predict_residual": true
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 16,
+      "val_batch_size": 16,
+      "num_workers": 8,
+      "steps_per_epoch": 2500
+    },
+    "train": {
+      "epochs": 24,
+      "lr": 0.0004,
+      "lr_min": 1e-06,
+      "warmup_steps": 1000,
+      "weight_decay": 0.0001,
+      "amp": true,
+      "ema_decay": 0.999,
+      "grad_clip": 1.0,
+      "loss": {
+        "charbonnier": 1.0,
+        "fft": 0.05,
+        "ssim": 0.2,
+        "dists": 0.1,
+        "dists_start_frac": 0.5,
+        "dists_batch": 4
+      },
+      "visualize_every": 4,
+      "checkpoint_every": 1,
+      "log_every": 250,
+      "seed": 42
+    }
+  }
+}

@@ -122,6 +122,8 @@ def main():
                 row[f"{name} PSNR"] = v["psnr"]
                 row[f"{name} SSIM"] = v["ssim"]
                 row[f"{name} DISTS"] = v["dists"]
+        for name, v in summaries[arch].get("benchmark_v2", {}).get("by_group", {}).items():
+            row[f"{name} PSNR"], row[f"{name} SSIM"], row[f"{name} DISTS"] = v["psnr"], v["ssim"], v["dists"]
         group_rows.append(row)
         case_rows.append({"architecture": arch,
                           **{name: v["psnr"] for name, v in bench["by_case"].items()}})

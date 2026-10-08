@@ -525,18 +525,20 @@ def _center_square(img: np.ndarray, size: int = 256) -> np.ndarray:
 # fixed benchmark
 # --------------------------------------------------------------------------- #
 
-def benchmark_dir(data_root) -> Path:
-    return Path(data_root) / "benchmark" / BENCHMARK_VERSION
+def benchmark_dir(data_root, version: str = BENCHMARK_VERSION) -> Path:
+    return Path(data_root) / "benchmark" / version
 
 
-def build_benchmark(data_root, per_case=(6, 3, 3), seed: int = 2026, force: bool = False):
+def build_benchmark(data_root, per_case=(6, 3, 3), seed: int = 2026, force: bool = False,
+                    version: str = BENCHMARK_VERSION, cases=None):
     """
     Builds the fixed benchmark from held-out images: for every case in
     BENCHMARK_CASES, `per_case` = (natural, low-light, medical) images at
     severities spread evenly over [0.1, 0.9]. Saves input/target PNG pairs and
     meta.json. Deterministic for a given data root.
     """
-    out_dir = benchmark_dir(data_root)
+    cases = BENCHMARK_CASES if cases is None else cases
+    out_dir = benchmark_dir(data_root, version)
     if (out_dir / "meta.json").exists() and not force:
         print(f"[benchmark] already built at {out_dir}, skipping.")
         return out_dir
@@ -559,7 +561,7 @@ def build_benchmark(data_root, per_case=(6, 3, 3), seed: int = 2026, force: bool
     natural = interleave(hold.get("hold_div2k", []), hold.get("hold_bsds", []), hold.get("hold_coco", []))
     medical = interleave(hold["hold_xray"], hold["hold_mri"], hold["hold_ct"], hold["hold_ultrasound"])
     n_nat, n_low, n_med = per_case
-    need_nat = len(BENCHMARK_CASES) * n_nat
+    need_nat = len(cases) * n_nat
     # low-light pool: real LOL low-light shots, then darkened held-out photos
     lowlight = [(p, False) for p in hold["hold_lol_low"]] + \
                [(p, True) for p in hold["hold_lol_high"] + natural[need_nat:]]
@@ -574,7 +576,7 @@ def build_benchmark(data_root, per_case=(6, 3, 3), seed: int = 2026, force: bool
         cursor[domain] += 1
         return item
 
-    for case, group, families in tqdm(BENCHMARK_CASES, desc="building benchmark"):
+    for case, group, families in tqdm(cases, desc=f"building benchmark {version}"):
         domains = ["natural"] * n_nat + ["lowlight"] * n_low + ["medical"] * n_med
         severities = np.linspace(0.1, 0.9, len(domains))
         severities = severities[rng.permutation(len(domains))]
@@ -609,8 +611,8 @@ def build_benchmark(data_root, per_case=(6, 3, 3), seed: int = 2026, force: bool
 class BenchmarkDataset(Dataset):
     """The fixed (corrupted, clean) pairs. `meta[i]` describes pair i."""
 
-    def __init__(self, data_root):
-        self.dir = benchmark_dir(data_root)
+    def __init__(self, data_root, version: str = BENCHMARK_VERSION):
+        self.dir = benchmark_dir(data_root, version)
         with open(self.dir / "meta.json") as f:
             self.meta = json.load(f)
 

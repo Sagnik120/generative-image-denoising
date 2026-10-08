@@ -16,8 +16,12 @@ three ideas:
        LISTED_FAMILIES  - the nine named in the brief.
        EXTRA_FAMILIES   - further corruptions we also train on, so the model
                           sees more than the disclosed list.
-       UNSEEN_FAMILIES  - NEVER used in training; only the benchmark applies
-                          them, to measure generalisation to unknown types.
+       UNSEEN_FAMILIES  - NEVER used in training by the default ("v1")
+                          pipeline; only the benchmark applies them, to
+                          measure generalisation to unknown types.
+     The "v2" pipeline (round 3) also trains on PLAN_FAMILIES, which include
+     two of the v1 unseen families, so it is tested on UNSEEN_V2_FAMILIES
+     (benchmark v2) instead.
 
   3. `RandomDegradation` builds a chain of 0-4 families per image, applied
      in the order a camera would produce them (optics -> blur -> noise ->
@@ -282,6 +286,67 @@ def add_periodic_noise(img, s, rng):
     return _clip(img + _lerp(0.01, 0.12, s) * wave[..., None])
 
 
+# ------------------------- v2 training families (round 3) ------------------------- #
+
+def add_sensor_noise(img, s, rng):
+    """Camera-sensor noise: shot noise with a per-channel gain plus read noise."""
+    gain = rng.uniform(0.7, 1.3, size=3).astype(np.float32)
+    shot = _lerp(0.002, 0.03, s) * gain
+    read = _lerp(0.002, 0.04, s) * float(rng.uniform(0.5, 1.5))
+    sigma = np.sqrt(np.maximum(img, 0.0) * shot + read ** 2).astype(np.float32)
+    return _clip(img + rng.standard_normal(img.shape).astype(np.float32) * sigma)
+
+
+def apply_ringing(img, s, rng):
+    """Over-sharpening halos (an unsharp mask with a large gain)."""
+    blur = cv2.GaussianBlur(img, (0, 0), float(rng.uniform(0.8, 2.5)))
+    return _clip(img + _lerp(0.3, 2.5, s) * (img - blur))
+
+
+def apply_double_jpeg(img, s, rng):
+    """Two JPEG passes with the 8x8 block grid shifted in between."""
+    dy, dx = int(rng.integers(1, 8)), int(rng.integers(1, 8))
+    out = np.roll(apply_jpeg_compression(img, s, rng), (dy, dx), axis=(0, 1))
+    out = apply_jpeg_compression(out, float(rng.uniform(0.0, s)), rng)
+    return np.ascontiguousarray(np.roll(out, (-dy, -dx), axis=(0, 1)))
+
+
+# ------------------------- unseen families for benchmark v2 ------------------------- #
+
+def add_film_grain(img, s, rng):
+    """Grain coarser than pixel noise, shared by the channels, stronger in the shadows."""
+    h, w = img.shape[:2]
+    grain = cv2.GaussianBlur(rng.standard_normal((h, w)).astype(np.float32), (0, 0),
+                             float(rng.uniform(0.6, 1.4)))
+    grain /= float(grain.std()) + 1e-6
+    luma = img.mean(axis=2, keepdims=True)
+    return _clip(img + _lerp(0.02, 0.15, s) * grain[..., None] * (0.3 + 0.7 * (1.0 - luma)))
+
+
+def apply_glass_blur(img, s, rng):
+    """Frosted glass: every pixel is read from a random nearby position."""
+    h, w = img.shape[:2]
+    d = _lerp(0.6, 2.5, s)
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    map_x = x + rng.uniform(-d, d, (h, w)).astype(np.float32)
+    map_y = y + rng.uniform(-d, d, (h, w)).astype(np.float32)
+    out = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+    return _clip(cv2.GaussianBlur(out, (0, 0), 0.5))
+
+
+def add_line_dropout(img, s, rng):
+    """Dead (black) or saturated (white) scan lines, along rows or columns."""
+    out = img.copy()
+    axis = int(rng.random() < 0.5)
+    lines = rng.random(out.shape[axis]) < _lerp(0.005, 0.08, s)
+    value = rng.choice([0.0, 1.0], size=int(lines.sum())).astype(np.float32)
+    if axis == 0:
+        out[lines] = value[:, None, None]
+    else:
+        out[:, lines] = value[None, :, None]
+    return out
+
+
 # ------------------------- registry ------------------------- #
 
 # name -> (function, group, position in the physical chain)
@@ -306,6 +371,13 @@ FAMILIES = {
     "quantization":         (apply_quantization,         "compression_like", 5),
     "jpeg":                 (apply_jpeg_compression,     "compression", 6),
     "webp":                 (apply_webp_compression,     "compression", 6),
+    # round 3
+    "ringing":              (apply_ringing,              "sharpen", 1),
+    "glass_blur":           (apply_glass_blur,           "blur", 1),
+    "sensor_noise":         (add_sensor_noise,           "noise", 2),
+    "film_grain":           (add_film_grain,             "noise", 3),
+    "line_dropout":         (add_line_dropout,           "impulse", 4),
+    "double_jpeg":          (apply_double_jpeg,          "compression", 6),
 }
 
 LISTED_FAMILIES = ["gaussian_noise", "poisson_noise", "salt_pepper", "speckle_noise",
@@ -317,6 +389,12 @@ UNSEEN_FAMILIES = ["uniform_noise", "pixelate", "periodic_noise"]
 
 TRAIN_FAMILIES = LISTED_FAMILIES + EXTRA_FAMILIES
 NUM_TRAIN_FAMILIES = len(TRAIN_FAMILIES)
+
+# Round 3: the "v2" training pipeline adds these to EXTRA_FAMILIES. Two of
+# them are v1's unseen families, so v2 models are tested on a new unseen set.
+PLAN_FAMILIES = ["pixelate", "periodic_noise", "sensor_noise", "ringing", "double_jpeg"]
+UNSEEN_V2_FAMILIES = ["film_grain", "glass_blur", "line_dropout"]
+EXTRA_FAMILY_SETS = {"v1": EXTRA_FAMILIES, "v2": EXTRA_FAMILIES + PLAN_FAMILIES}
 
 # At most this many families from one group in a single chain (two different
 # blurs or two codecs stacked just destroy the image without teaching anything).
@@ -346,25 +424,33 @@ class RandomDegradation:
     listed_weight: share of draws taken from the brief's nine families; the
                    rest come from EXTRA_FAMILIES.
     shuffle_prob:  fraction of chains applied in random instead of physical order.
+    families:      "v1" (LISTED + EXTRA, the round-2 pipeline) or "v2" (also
+                   PLAN_FAMILIES).
+    severity_beta: (a, b) of the Beta distribution severities are drawn from;
+                   a larger b gives milder corruptions.
     """
 
     def __init__(self, num_ops_probs=(0.03, 0.34, 0.39, 0.19, 0.05),
-                 listed_weight=0.75, shuffle_prob=0.2):
+                 listed_weight=0.75, shuffle_prob=0.2, families="v1",
+                 severity_beta=(1.2, 1.5)):
         self.num_ops_probs = np.asarray(num_ops_probs, dtype=np.float64)
         self.num_ops_probs /= self.num_ops_probs.sum()
         self.shuffle_prob = shuffle_prob
+        self.severity_beta = tuple(severity_beta)
+        extra = EXTRA_FAMILY_SETS[families]
+        self.names = LISTED_FAMILIES + extra
         w = np.array([listed_weight / len(LISTED_FAMILIES)] * len(LISTED_FAMILIES)
-                     + [(1 - listed_weight) / len(EXTRA_FAMILIES)] * len(EXTRA_FAMILIES))
+                     + [(1 - listed_weight) / len(extra)] * len(extra))
         self.family_probs = w / w.sum()
 
     def sample_recipe(self, rng):
         k = int(rng.choice(len(self.num_ops_probs), p=self.num_ops_probs))
         chosen, group_count = [], {}
-        for idx in rng.choice(NUM_TRAIN_FAMILIES, size=NUM_TRAIN_FAMILIES, replace=False,
+        for idx in rng.choice(len(self.names), size=len(self.names), replace=False,
                               p=self.family_probs):
             if len(chosen) == k:
                 break
-            name = TRAIN_FAMILIES[idx]
+            name = self.names[idx]
             group = FAMILIES[name][1]
             if group_count.get(group, 0) >= _GROUP_LIMIT.get(group, 1):
                 continue
@@ -372,7 +458,8 @@ class RandomDegradation:
             chosen.append(name)
         # Longer chains use gentler individual severities, so a 3-4 family mix
         # is still a restorable image rather than noise.
-        return [(name, float(rng.beta(1.2, 1.5 + 0.6 * (len(chosen) - 1)))) for name in chosen]
+        a, b = self.severity_beta
+        return [(name, float(rng.beta(a, b + 0.6 * (len(chosen) - 1)))) for name in chosen]
 
     def __call__(self, img, rng=None, return_label=False):
         rng = rng if rng is not None else np.random.default_rng()
@@ -383,7 +470,8 @@ class RandomDegradation:
         # Per-family target: 0 = absent, 0.25..1 = present at that severity.
         label = np.zeros(NUM_TRAIN_FAMILIES, dtype=np.float32)
         for name, s in recipe:
-            label[TRAIN_FAMILIES.index(name)] = 0.25 + 0.75 * s
+            if name in TRAIN_FAMILIES:           # v2-only families have no label slot
+                label[TRAIN_FAMILIES.index(name)] = 0.25 + 0.75 * s
         return out, label
 
 
@@ -408,4 +496,13 @@ BENCHMARK_CASES = (
         ("motion_blur", "salt_pepper", "jpeg"))]
     + [(name, "unseen", [name]) for name in UNSEEN_FAMILIES]
     + [("pixelate+uniform_noise", "unseen", ["pixelate", "uniform_noise"])]
+)
+
+# Benchmark v2 (round 3): families no pipeline trains on, plus the three new
+# v2 training families so their in-distribution quality is on record too.
+BENCHMARK_CASES_V2 = (
+    [(name, "unseen_v2", [name]) for name in UNSEEN_V2_FAMILIES]
+    + [("+".join(f), "unseen_v2", list(f)) for f in (
+        ("glass_blur", "film_grain"), ("line_dropout", "jpeg"))]
+    + [(name, "plan", [name]) for name in ("sensor_noise", "ringing", "double_jpeg")]
 )
