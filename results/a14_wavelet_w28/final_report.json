@@ -1,0 +1,56 @@
+{
+  "architecture": "a14_wavelet_w28",
+  "best_composite_score": 2.4607850901949764,
+  "flops_per_forward_call": 2521646624.0,
+  "gflops_per_forward_call": 2.521646624,
+  "inference_forward_passes": 1,
+  "true_total_gflops_at_inference": 2.521646624,
+  "params": 3183136,
+  "config": {
+    "architecture": "a14_wavelet_w28",
+    "model": {
+      "wavelet": true,
+      "width": 28,
+      "enc_blocks": [
+        4,
+        5,
+        7
+      ],
+      "middle_blocks": 5,
+      "dec_blocks": [
+        3,
+        2,
+        2
+      ]
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 16,
+      "val_batch_size": 16,
+      "num_workers": 8,
+      "steps_per_epoch": 2500
+    },
+    "train": {
+      "epochs": 24,
+      "lr": 0.0004,
+      "lr_min": 1e-06,
+      "warmup_steps": 1000,
+      "weight_decay": 0.0001,
+      "amp": true,
+      "ema_decay": 0.999,
+      "grad_clip": 1.0,
+      "loss": {
+        "charbonnier": 1.0,
+        "fft": 0.05,
+        "ssim": 0.2,
+        "dists": 0.1,
+        "dists_start_frac": 0.5,
+        "dists_batch": 4
+      },
+      "visualize_every": 4,
+      "checkpoint_every": 1,
+      "log_every": 250,
+      "seed": 42
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "architecture": "a17_naf_dists0",
+  "best_composite_score": 2.4970905959125704,
+  "flops_per_forward_call": 4977500160.0,
+  "gflops_per_forward_call": 4.97750016,
+  "inference_forward_passes": 1,
+  "true_total_gflops_at_inference": 4.97750016,
+  "params": 5517387,
+  "config": {
+    "architecture": "a17_naf_dists0",
+    "model": {
+      "width": 24,
+      "enc_blocks": [
+        2,
+        2,
+        2,
+        4
+      ],
+      "middle_blocks": 3,
+      "dec_blocks": [
+        1,
+        1,
+        1,
+        2
+      ]
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 16,
+      "val_batch_size": 16,
+      "num_workers": 8,
+      "steps_per_epoch": 2500
+    },
+    "train": {
+      "epochs": 24,
+      "lr": 0.0004,
+      "lr_min": 1e-06,
+      "warmup_steps": 1000,
+      "weight_decay": 0.0001,
+      "amp": true,
+      "ema_decay": 0.999,
+      "grad_clip": 1.0,
+      "loss": {
+        "charbonnier": 1.0,
+        "fft": 0.05,
+        "ssim": 0.2,
+        "dists": 0.1,
+        "dists_start_frac": 0.0,
+        "dists_batch": 4
+      },
+      "visualize_every": 4,
+      "checkpoint_every": 1,
+      "log_every": 250,
+      "seed": 42
+    }
+  }
+}
