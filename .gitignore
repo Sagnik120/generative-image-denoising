@@ -38,7 +38,7 @@ results/_dry_run/
 .run.lock
 
 # Local documentation, PDFs & instructions (kept locally, excluded from git)
-*.pdf
-docs/
-instructions/
-Generative_Denoising_Literature_Review.md
+# *.pdf
+# docs/
+# instructions/
+# Generative_Denoising_Literature_Review.md
