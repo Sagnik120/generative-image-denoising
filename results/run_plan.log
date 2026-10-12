@@ -1,0 +1,349 @@
+nohup: ignoring input
+[benchmark] already built at /DATA1/shrusti/genai_project/datasets/benchmark/v2, skipping.
+[run_plan 10-09 01:01:40] running: /home/m25cse030/genai_project/generative-image-denoising/venv/bin/python scripts/run_all.py --data_root /DATA1/shrusti/genai_project/datasets --results_root /DATA1/shrusti/genai_project/results --archs a12_naf_w16 a13_naf_w12 a14_wavelet_w28 a15_naf_degv2 a16_naf_attn_degv2 a17_naf_dists0 a18_naf_dists0_strong a19_final --max_gpu_gb 30.0 --gpus 0 2 --allow_busy_gpu --dry_run
+[run_all 10-09 01:01:41] data OK: coco=33041, natural_whole=3450, natural_tiles=20552, bsds=300, lol_high=485, lol_low=485, xray=4919, mri=8195, ct=8000, ultrasound=624
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=VGG16_Weights.IMAGENET1K_V1`. You can also use `weights=VGG16_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/DISTS_pytorch/DISTS_pt.py:63: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  weights = torch.load(os.path.join(sys.prefix,'weights.pt'))
+[run_all 10-09 01:01:44] 8 architecture(s) on 2 GPU(s): GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use); GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:01:44] START a12_naf_w16 on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:02:04] START a13_naf_w12 on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:02:26] END   a12_naf_w16: OK (0.01 h)
+[run_all 10-09 01:02:26] START a14_wavelet_w28 on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:02:45] END   a13_naf_w12: OK (0.01 h)
+[run_all 10-09 01:02:45] START a15_naf_degv2 on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:03:05] END   a14_wavelet_w28: OK (0.01 h)
+[run_all 10-09 01:03:05] START a16_naf_attn_degv2 on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:03:32] END   a15_naf_degv2: OK (0.01 h)
+[run_all 10-09 01:03:32] START a17_naf_dists0 on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:03:52] END   a16_naf_attn_degv2: OK (0.01 h)
+[run_all 10-09 01:03:52] START a18_naf_dists0_strong on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:04:18] END   a17_naf_dists0: OK (0.01 h)
+[run_all 10-09 01:04:18] START a19_final on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:04:38] END   a18_naf_dists0_strong: OK (0.01 h)
+[run_all 10-09 01:05:04] END   a19_final: OK (0.01 h)
+
+======================================================================
+DRY RUN SUMMARY
+======================================================================
+  a12_naf_w16                OK (0.01 h)  3.04 it/s, peak memory 7.6GB
+  a13_naf_w12                OK (0.01 h)  3.41 it/s, peak memory 6.2GB
+  a14_wavelet_w28            OK (0.01 h)  3.80 it/s, peak memory 6.3GB
+  a15_naf_degv2              OK (0.01 h)  2.37 it/s, peak memory 10.5GB
+  a16_naf_attn_degv2         OK (0.01 h)  2.25 it/s, peak memory 10.5GB
+  a17_naf_dists0             OK (0.01 h)  2.38 it/s, peak memory 10.5GB
+  a18_naf_dists0_strong      OK (0.01 h)  2.30 it/s, peak memory 10.5GB
+  a19_final                  OK (0.01 h)  2.29 it/s, peak memory 10.5GB
+======================================================================
+ALL DONE -- every GPU used by this command is now free.
+[run_plan 10-09 01:05:04] re-evaluating a05_nafnet_v2 on benchmark v1 + v2
+[gpu] NVIDIA RTX A5000  23.5 GB  (CUDA_VISIBLE_DEVICES=GPU-b1174f61-f550-7bc6-5f93-a7b8f01619f5)
+[dataset] training views: coco=33041, natural_whole=3450, natural_tiles=20552, bsds=300, lol_high=485, lol_low=485, xray=4919, mri=8195, ct=8000, ultrasound=624
+[dataset] benchmark: 396 fixed image pairs.
+[a05_nafnet_v2] parameters: 5,517,387  | total steps: 60,000  | amp: True
+[evaluate.py] Loaded checkpoint: /DATA1/shrusti/genai_project/results/a05_nafnet_v2/checkpoints/best_model.pt
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=VGG16_Weights.IMAGENET1K_V1`. You can also use `weights=VGG16_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/DISTS_pytorch/DISTS_pt.py:63: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  weights = torch.load(os.path.join(sys.prefix,'weights.pt'))
+[evaluate.py] Final evaluation summary:
+    architecture: a05_nafnet_v2
+    checkpoint: /DATA1/shrusti/genai_project/results/a05_nafnet_v2/checkpoints/best_model.pt
+    final_val_loss: 0.02062509741370726
+    final_val_psnr: 31.9245
+    final_val_ssim: 0.855
+    final_val_dists: 0.1542
+    flops: 4977500160.0
+    gflops: 4.97750016
+    params: 5517387
+    group   single=35.05/0.920/0.106  extra=35.12/0.913/0.104  pair=30.68/0.839/0.163  triple=29.55/0.793/0.198  unseen=29.19/0.793/0.217
+    domain  natural=28.47/0.817/0.157  lowlight=36.82/0.886/0.180  medical=33.94/0.901/0.123
+[evaluate.py] Packaged results into: /DATA1/shrusti/genai_project/results/a05_nafnet_v2_results.zip  (checkpoints left out; pass --zip_checkpoints to include)
+[run_plan 10-09 01:05:22] running: /home/m25cse030/genai_project/generative-image-denoising/venv/bin/python scripts/run_all.py --data_root /DATA1/shrusti/genai_project/datasets --results_root /DATA1/shrusti/genai_project/results --archs a12_naf_w16 a13_naf_w12 a14_wavelet_w28 a15_naf_degv2 a16_naf_attn_degv2 a17_naf_dists0 a18_naf_dists0_strong --max_gpu_gb 30.0 --gpus 0 2 --allow_busy_gpu
+[run_all 10-09 01:05:23] data OK: coco=33041, natural_whole=3450, natural_tiles=20552, bsds=300, lol_high=485, lol_low=485, xray=4919, mri=8195, ct=8000, ultrasound=624
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=VGG16_Weights.IMAGENET1K_V1`. You can also use `weights=VGG16_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/DISTS_pytorch/DISTS_pt.py:63: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  weights = torch.load(os.path.join(sys.prefix,'weights.pt'))
+[run_all 10-09 01:05:26] 7 architecture(s) on 2 GPU(s): GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use); GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:05:26] START a12_naf_w16 on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 01:05:46] START a13_naf_w12 on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 03:54:23] END   a13_naf_w12: OK (2.81 h)
+[run_all 10-09 03:54:23] START a14_wavelet_w28 on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 04:35:27] END   a12_naf_w16: OK (3.50 h)
+[run_all 10-09 04:35:27] START a15_naf_degv2 on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 06:55:44] END   a14_wavelet_w28: OK (3.02 h)
+[run_all 10-09 06:55:44] START a16_naf_attn_degv2 on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 09:22:57] END   a15_naf_degv2: OK (4.79 h)
+[run_all 10-09 09:22:57] START a17_naf_dists0 on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 11:44:06] END   a16_naf_attn_degv2: OK (4.81 h)
+[run_all 10-09 11:44:06] START a18_naf_dists0_strong on GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 14:27:12] END   a17_naf_dists0: OK (5.07 h)
+[run_all 10-09 16:42:32] END   a18_naf_dists0_strong: OK (4.97 h)
+[compare] Architecture index written to /DATA1/shrusti/genai_project/results/INDEX.md
+
+[compare] Comparison table saved to /DATA1/shrusti/genai_project/results/comparison/comparison_table.csv
+
+                       PSNR (dB) [higher better]  SSIM [higher better]  DISTS [lower better]  GFLOPs [lower better]  Params (M)
+architecture                                                                                                                   
+a05_nafnet_v2                             31.924                0.8550                0.1542                  4.978        5.52
+a06_restormer_v2                          31.682                0.8520                0.1623                  4.984        1.31
+a07_naf_attn_hybrid                       31.854                0.8558                0.1563                  4.928        4.02
+a08_degradation_aware                     31.835                0.8530                0.1612                  4.982        4.23
+a09_wavelet_naf                           31.891                0.8543                0.1545                  5.018        6.44
+a10_resflow_fewstep                       30.349                0.8238                0.1976                  5.039        2.86
+a11_freq_spatial                          31.838                0.8552                0.1572                  4.884        5.27
+a12_naf_w16                               31.437                0.8468                0.1682                  2.278        2.47
+a13_naf_w12                               30.871                0.8364                0.1856                  1.318        1.40
+a14_wavelet_w28                           31.359                0.8455                0.1687                  2.522        3.18
+a15_naf_degv2                             32.034                0.8594                0.1537                  4.978        5.52
+a16_naf_attn_degv2                        31.989                0.8582                0.1550                  4.853        4.19
+a17_naf_dists0                            31.833                0.8530                0.1517                  4.978        5.52
+a18_naf_dists0_strong                     31.566                0.8476                0.1502                  4.978        5.52
+
+[compare] Per-axis ranking (lower avg_rank = better overall) saved to /DATA1/shrusti/genai_project/results/comparison/comparison_ranking.csv
+
+                       PSNR rank  SSIM rank  DISTS rank  GFLOPs rank  avg_rank
+architecture                                                                  
+a15_naf_degv2                1.0        1.0         3.0          8.5     3.375
+a16_naf_attn_degv2           2.0        2.0         6.0          4.0     3.500
+a05_nafnet_v2                3.0        5.0         4.0          8.5     5.125
+a07_naf_attn_hybrid          5.0        3.0         7.0          6.0     5.250
+a11_freq_spatial             6.0        4.0         8.0          5.0     5.750
+a17_naf_dists0               8.0        7.5         2.0          8.5     6.500
+a09_wavelet_naf              4.0        6.0         5.0         13.0     7.000
+a18_naf_dists0_strong       10.0       10.0         1.0          8.5     7.375
+a08_degradation_aware        7.0        7.5         9.0         11.0     8.625
+a12_naf_w16                 11.0       11.0        11.0          2.0     8.750
+a14_wavelet_w28             12.0       12.0        12.0          3.0     9.750
+a06_restormer_v2             9.0        9.0        10.0         12.0    10.000
+a13_naf_w12                 13.0       13.0        13.0          1.0    10.000
+a10_resflow_fewstep         14.0       14.0        14.0         14.0    14.000
+
+[compare] PSNR by degradation group and domain:
+
+                       single PSNR  extra PSNR  pair PSNR  triple PSNR  unseen PSNR  natural PSNR  lowlight PSNR  medical PSNR  unseen_v2 PSNR  plan PSNR
+architecture                                                                                                                                             
+a05_nafnet_v2              35.0474     35.1219    30.6826      29.5507      29.1928       28.4693        36.8210       33.9384         30.8498    33.1766
+a06_restormer_v2           34.8489     34.1716    30.4957      29.4931      28.9849       28.2806        36.5127       33.6543             NaN        NaN
+a07_naf_attn_hybrid        34.8436     34.7442    30.6252      29.5497      29.5242       28.4161        36.7383       33.8445             NaN        NaN
+a08_degradation_aware      34.9832     34.9498    30.5978      29.4769      29.0770       28.4325        36.7136       33.7626             NaN        NaN
+a09_wavelet_naf            34.9850     35.1708    30.6418      29.5833      29.1030       28.3977        36.7586       34.0107             NaN        NaN
+a10_resflow_fewstep        32.9197     32.3787    29.3117      28.5125      28.4462       27.0567        35.3563       31.9243             NaN        NaN
+a11_freq_spatial           34.9065     34.6255    30.6155      29.4803      29.4601       28.3992        36.6785       33.8763             NaN        NaN
+a12_naf_w16                34.5039     33.9431    30.2501      29.2589      28.9367       27.9858        36.3715       33.4032         30.3913    33.0187
+a13_naf_w12                33.5743     32.8669    29.8298      28.8797      28.9065       27.4436        35.9806       32.6172         29.2807    32.9678
+a14_wavelet_w28            34.3022     33.8503    30.2224      29.2703      28.8886       27.8929        36.3707       33.2792         30.0439    33.0628
+a15_naf_degv2              34.8884     34.5227    30.5279      29.3568      31.6100       28.5735        36.9425       34.0466         30.9910    36.2072
+a16_naf_attn_degv2         34.8389     34.4889    30.4638      29.3006      31.6403       28.5395        36.8905       33.9876         30.1756    36.4304
+a17_naf_dists0             35.0865     34.8454    30.5779      29.4629      28.9843       28.3897        36.6091       33.9449         30.9122    33.2156
+a18_naf_dists0_strong      34.7553     34.3612    30.3977      29.2562      28.6827       28.1650        36.2995       33.6329         30.7910    33.0546
+
+[compare] PSNR by case (rows) -- 'input' is the corrupted image itself:
+
+architecture                                       input  a05_nafnet_v2  a06_restormer_v2  a07_naf_attn_hybrid  a08_degradation_aware  a09_wavelet_naf  a10_resflow_fewstep  a11_freq_spatial  a12_naf_w16  a13_naf_w12  a14_wavelet_w28  a15_naf_degv2  a16_naf_attn_degv2  a17_naf_dists0  a18_naf_dists0_strong
+gaussian_noise                                     20.98          32.94             32.78                32.84                  32.88            32.93                31.97             32.83        32.57        32.14            32.67          32.87               32.82           32.94                  32.81
+poisson_noise                                      25.17          36.06             35.89                35.93                  35.94            36.12                35.05             35.93        35.59        35.15            35.71          36.01               35.92           36.04                  35.89
+salt_pepper                                        15.06          37.17             36.90                36.46                  38.00            35.85                31.78             36.75        36.50        34.32            34.44          37.01               37.20           37.98                  37.66
+speckle_noise                                      25.60          34.99             34.47                34.84                  34.89            34.76                33.58             34.82        34.56        33.87            34.62          35.03               35.02           34.87                  34.64
+gaussian_blur                                      30.63          33.98             33.87                33.69                  33.87            33.97                32.24             33.88        33.23        32.84            33.32          33.96               33.78           33.93                  33.56
+motion_blur                                        28.88          31.64             31.61                31.47                  31.36            31.87                29.19             31.54        30.87        29.47            31.01          30.91               30.77           31.27                  30.66
+defocus_blur                                       30.18          33.55             33.47                33.35                  33.46            33.81                31.34             33.57        33.03        32.03            32.95          33.49               33.54           33.38                  32.91
+jpeg                                               35.14          35.94             35.77                36.02                  36.04            36.04                35.49             35.94        35.90        35.72            35.72          36.10               36.04           36.06                  35.94
+chromatic_aberration                               29.62          39.15             38.88                38.99                  38.41            39.53                35.63             38.89        38.28        36.64            38.26          38.62               38.46           39.31                  38.73
+correlated_noise                                   22.71          30.36             30.10                30.27                  30.22            30.38                29.49             30.24        30.02        29.57            30.09          30.21               30.12           30.21                  30.03
+resize_blur                                        34.24          34.02             33.79                33.86                  34.05            34.62                33.49             34.01        33.62        33.43            33.94          33.91               33.86           34.22                  33.53
+small_artifacts                                    29.81          40.98             38.62                40.10                  40.57            40.51                34.16             39.63        38.18        35.60            37.52          39.44               39.49           40.11                  39.52
+gaussian_blur+gaussian_noise                       21.20          28.99             28.68                28.87                  28.88            28.97                28.10             28.95        28.65        28.42            28.73          28.92               28.85           28.84                  28.82
+motion_blur+gaussian_noise                         20.20          26.55             26.54                26.54                  26.48            26.67                25.57             26.55        26.21        25.86            26.36          26.29               26.23           26.34                  26.17
+defocus_blur+poisson_noise                         24.03          30.19             30.15                30.09                  30.15            30.23                29.56             30.16        29.98        29.71            30.03          30.18               30.06           30.11                  29.90
+gaussian_noise+jpeg                                24.44          33.90             33.82                33.90                  33.83            33.99                32.27             33.74        33.61        33.29            33.64          33.87               33.80           33.84                  33.64
+gaussian_blur+jpeg                                 29.32          31.89             31.72                31.71                  31.53            31.78                30.60             31.73        31.46        31.12            31.35          31.62               31.68           31.70                  31.49
+motion_blur+jpeg                                   28.14          29.81             29.88                29.75                  29.71            29.92                28.44             29.76        29.33        28.77            29.53          29.50               29.41           29.58                  29.32
+gaussian_blur+salt_pepper                          15.81          31.80             31.22                31.59                  31.72            31.24                29.11             31.68        30.88        30.02            30.42          31.40               31.20           31.74                  31.57
+defocus_blur+speckle_noise                         22.59          27.99             27.92                27.93                  27.96            27.98                27.25             27.95        27.77        27.43            27.82          27.93               27.77           27.88                  27.68
+poisson_noise+jpeg                                 30.18          34.71             34.52                34.68                  34.55            34.69                34.02             34.52        34.36        34.09            34.43          34.68               34.67           34.63                  34.55
+chromatic_aberration+gaussian_noise                21.21          32.01             31.63                32.01                  31.96            32.07                29.89             31.92        31.33        30.88            31.39          31.69               31.82           31.86                  31.71
+gaussian_noise+salt_pepper                         15.33          31.43             31.05                31.53                  31.58            31.07                29.75             31.48        31.03        30.66            30.71          31.46               31.34           31.56                  31.45
+chromatic_aberration+defocus_blur                  25.23          28.93             28.81                28.91                  28.80            29.09                27.18             28.95        28.41        27.70            28.26          28.79               28.75           28.86                  28.47
+gaussian_blur+gaussian_noise+jpeg                  23.83          29.39             29.43                29.46                  29.49            29.53                28.84             29.47        29.31        29.11            29.32          29.34               29.44           29.44                  29.25
+motion_blur+poisson_noise+jpeg                     25.20          28.30             28.30                28.31                  28.19            28.37                27.26             28.14        27.98        27.54            28.04          28.12               27.96           28.13                  27.87
+defocus_blur+speckle_noise+salt_pepper             15.84          30.85             30.66                30.77                  30.85            30.71                29.24             30.78        30.46        29.91            30.37          30.68               30.55           30.71                  30.57
+chromatic_aberration+gaussian_blur+gaussian_noise  22.20          31.05             30.88                30.96                  30.77            30.97                30.11             30.90        30.72        30.37            30.66          30.87               30.76           31.00                  30.80
+motion_blur+salt_pepper+jpeg                       17.12          28.16             28.19                28.25                  28.10            28.33                27.10             28.11        27.84        27.47            27.95          27.78               27.80           28.04                  27.78
+uniform_noise                                      22.17          32.50             32.30                32.48                  32.52            32.53                31.67             32.43        32.12        31.70            32.26          32.38               32.40           32.47                  32.32
+pixelate                                           26.88          27.13             27.04                27.10                  27.08            27.12                27.00             27.11        27.10        27.11            27.03          29.28               29.34           27.14                  27.11
+periodic_noise                                     27.97          30.44             29.95                31.83                  30.00            30.07                28.45             31.58        29.85        30.28            29.54          36.56               36.68           29.62                  28.65
+pixelate+uniform_noise                             21.38          26.70             26.65                26.67                  26.71            26.69                26.67             26.72        26.68        26.53            26.72          28.23               28.15           26.71                  26.65
+
+[compare] Comparison dashboard figure saved to /DATA1/shrusti/genai_project/results/comparison/comparison_dashboard.png
+
+======================================================================
+SUMMARY
+======================================================================
+  a12_naf_w16                OK (3.50 h)
+  a13_naf_w12                OK (2.81 h)
+  a14_wavelet_w28            OK (3.02 h)
+  a15_naf_degv2              OK (4.79 h)
+  a16_naf_attn_degv2         OK (4.81 h)
+  a17_naf_dists0             OK (5.07 h)
+  a18_naf_dists0_strong      OK (4.97 h)
+======================================================================
+ALL DONE -- every GPU used by this command is now free.
+# Round-3 decision
+
+Written by scripts/run_plan.py on 2026-10-09 16:42.
+
+| Arch | PSNR | SSIM | DISTS | GFLOPs | unseen-v2 PSNR |
+|---|---|---|---|---|---|
+| a05_nafnet_v2 | 31.924 | 0.8550 | 0.1542 | 4.98 | 30.85 |
+| a12_naf_w16 | 31.437 | 0.8468 | 0.1682 | 2.28 | 30.39 |
+| a13_naf_w12 | 30.871 | 0.8364 | 0.1856 | 1.32 | 29.28 |
+| a14_wavelet_w28 | 31.359 | 0.8455 | 0.1687 | 2.52 | 30.04 |
+| a15_naf_degv2 | 32.034 | 0.8594 | 0.1537 | 4.98 | 30.99 |
+| a16_naf_attn_degv2 | 31.989 | 0.8582 | 0.1550 | 4.85 | 30.18 |
+| a17_naf_dists0 | 31.833 | 0.8530 | 0.1517 | 4.98 | 30.91 |
+| a18_naf_dists0_strong | 31.566 | 0.8476 | 0.1502 | 4.98 | 30.79 |
+
+## Rules applied
+
+- size: a12_naf_w16 2.28 GFLOPs, PSNR -0.488, SSIM -0.0082, DISTS +0.0140 vs a05_nafnet_v2 -> too much quality lost
+- size: a13_naf_w12 1.32 GFLOPs, PSNR -1.053, SSIM -0.0186, DISTS +0.0314 vs a05_nafnet_v2 -> too much quality lost
+- size: a14_wavelet_w28 2.52 GFLOPs, PSNR -0.565, SSIM -0.0095, DISTS +0.0145 vs a05_nafnet_v2 -> too much quality lost
+- size: chosen body = a05_nafnet_v2
+- degradation v2: unseen-v2 PSNR +0.141, overall PSNR +0.110 vs a05_nafnet_v2 -> accepted
+- attention: unseen-v2 PSNR -0.815, overall PSNR -0.045 vs a15_naf_degv2 -> rejected
+- loss: a17_naf_dists0 DISTS -0.0025, PSNR -0.091 vs a05_nafnet_v2 -> rejected
+- loss: a18_naf_dists0_strong DISTS -0.0040, PSNR -0.359 vs a05_nafnet_v2 -> rejected
+- loss: chosen = round-2 default
+
+## Final model (a19_final)
+
+- body: `a05_nafnet_v2`; global attention: False; degradation pipeline: v2; loss: `round-2 default`; 80 epochs (200,000 steps)
+[run_plan 10-09 16:42:33] final config written to /home/m25cse030/genai_project/generative-image-denoising/src/architectures/a19_final/config.yaml
+[run_plan 10-09 16:42:33] running: /home/m25cse030/genai_project/generative-image-denoising/venv/bin/python scripts/run_all.py --data_root /DATA1/shrusti/genai_project/datasets --results_root /DATA1/shrusti/genai_project/results --archs a19_final --max_gpu_gb 30.0 --gpus 0 2 --allow_busy_gpu
+[run_all 10-09 16:42:35] data OK: coco=33041, natural_whole=3450, natural_tiles=20552, bsds=300, lol_high=485, lol_low=485, xray=4919, mri=8195, ct=8000, ultrasound=624
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=VGG16_Weights.IMAGENET1K_V1`. You can also use `weights=VGG16_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/DISTS_pytorch/DISTS_pt.py:63: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  weights = torch.load(os.path.join(sys.prefix,'weights.pt'))
+[run_all 10-09 16:42:37] 1 architecture(s) on 2 GPU(s): GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use); GPU 2 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-09 16:42:37] START a19_final on GPU 0 NVIDIA RTX A5000 (24 GB, 15 MB in use)
+[run_all 10-10 10:04:06] END   a19_final: OK (17.36 h)
+[compare] Architecture index written to /DATA1/shrusti/genai_project/results/INDEX.md
+
+[compare] Comparison table saved to /DATA1/shrusti/genai_project/results/comparison/comparison_table.csv
+
+                       PSNR (dB) [higher better]  SSIM [higher better]  DISTS [lower better]  GFLOPs [lower better]  Params (M)
+architecture                                                                                                                   
+a05_nafnet_v2                             31.924                0.8550                0.1542                  4.978        5.52
+a06_restormer_v2                          31.682                0.8520                0.1623                  4.984        1.31
+a07_naf_attn_hybrid                       31.854                0.8558                0.1563                  4.928        4.02
+a08_degradation_aware                     31.835                0.8530                0.1612                  4.982        4.23
+a09_wavelet_naf                           31.891                0.8543                0.1545                  5.018        6.44
+a10_resflow_fewstep                       30.349                0.8238                0.1976                  5.039        2.86
+a11_freq_spatial                          31.838                0.8552                0.1572                  4.884        5.27
+a12_naf_w16                               31.437                0.8468                0.1682                  2.278        2.47
+a13_naf_w12                               30.871                0.8364                0.1856                  1.318        1.40
+a14_wavelet_w28                           31.359                0.8455                0.1687                  2.522        3.18
+a15_naf_degv2                             32.034                0.8594                0.1537                  4.978        5.52
+a16_naf_attn_degv2                        31.989                0.8582                0.1550                  4.853        4.19
+a17_naf_dists0                            31.833                0.8530                0.1517                  4.978        5.52
+a18_naf_dists0_strong                     31.566                0.8476                0.1502                  4.978        5.52
+a19_final                                 33.112                0.8743                0.1293                  4.978        5.52
+
+[compare] Per-axis ranking (lower avg_rank = better overall) saved to /DATA1/shrusti/genai_project/results/comparison/comparison_ranking.csv
+
+                       PSNR rank  SSIM rank  DISTS rank  GFLOPs rank  avg_rank
+architecture                                                                  
+a19_final                    1.0        1.0         1.0          9.0     3.000
+a15_naf_degv2                2.0        2.0         4.0          9.0     4.250
+a16_naf_attn_degv2           3.0        3.0         7.0          4.0     4.250
+a05_nafnet_v2                4.0        6.0         5.0          9.0     6.000
+a07_naf_attn_hybrid          6.0        4.0         8.0          6.0     6.000
+a11_freq_spatial             7.0        5.0         9.0          5.0     6.500
+a17_naf_dists0               9.0        8.5         3.0          9.0     7.375
+a09_wavelet_naf              5.0        7.0         6.0         14.0     8.000
+a18_naf_dists0_strong       11.0       11.0         2.0          9.0     8.250
+a12_naf_w16                 12.0       12.0        12.0          2.0     9.500
+a08_degradation_aware        8.0        8.5        10.0         12.0     9.625
+a14_wavelet_w28             13.0       13.0        13.0          3.0    10.500
+a13_naf_w12                 14.0       14.0        14.0          1.0    10.750
+a06_restormer_v2            10.0       10.0        11.0         13.0    11.000
+a10_resflow_fewstep         15.0       15.0        15.0         15.0    15.000
+
+[compare] PSNR by degradation group and domain:
+
+                       single PSNR  extra PSNR  pair PSNR  triple PSNR  unseen PSNR  natural PSNR  lowlight PSNR  medical PSNR  unseen_v2 PSNR  plan PSNR
+architecture                                                                                                                                             
+a05_nafnet_v2              35.0474     35.1219    30.6826      29.5507      29.1928       28.4693        36.8210       33.9384         30.8498    33.1766
+a06_restormer_v2           34.8489     34.1716    30.4957      29.4931      28.9849       28.2806        36.5127       33.6543             NaN        NaN
+a07_naf_attn_hybrid        34.8436     34.7442    30.6252      29.5497      29.5242       28.4161        36.7383       33.8445             NaN        NaN
+a08_degradation_aware      34.9832     34.9498    30.5978      29.4769      29.0770       28.4325        36.7136       33.7626             NaN        NaN
+a09_wavelet_naf            34.9850     35.1708    30.6418      29.5833      29.1030       28.3977        36.7586       34.0107             NaN        NaN
+a10_resflow_fewstep        32.9197     32.3787    29.3117      28.5125      28.4462       27.0567        35.3563       31.9243             NaN        NaN
+a11_freq_spatial           34.9065     34.6255    30.6155      29.4803      29.4601       28.3992        36.6785       33.8763             NaN        NaN
+a12_naf_w16                34.5039     33.9431    30.2501      29.2589      28.9367       27.9858        36.3715       33.4032         30.3913    33.0187
+a13_naf_w12                33.5743     32.8669    29.8298      28.8797      28.9065       27.4436        35.9806       32.6172         29.2807    32.9678
+a14_wavelet_w28            34.3022     33.8503    30.2224      29.2703      28.8886       27.8929        36.3707       33.2792         30.0439    33.0628
+a15_naf_degv2              34.8884     34.5227    30.5279      29.3568      31.6100       28.5735        36.9425       34.0466         30.9910    36.2072
+a16_naf_attn_degv2         34.8389     34.4889    30.4638      29.3006      31.6403       28.5395        36.8905       33.9876         30.1756    36.4304
+a17_naf_dists0             35.0865     34.8454    30.5779      29.4629      28.9843       28.3897        36.6091       33.9449         30.9122    33.2156
+a18_naf_dists0_strong      34.7553     34.3612    30.3977      29.2562      28.6827       28.1650        36.2995       33.6329         30.7910    33.0546
+a19_final                  36.2753     37.0869    31.1783      29.9635      32.7542       29.5046        37.9936       35.4471         31.8781    37.3758
+
+[compare] PSNR by case (rows) -- 'input' is the corrupted image itself:
+
+architecture                                       input  a05_nafnet_v2  a06_restormer_v2  a07_naf_attn_hybrid  a08_degradation_aware  a09_wavelet_naf  a10_resflow_fewstep  a11_freq_spatial  a12_naf_w16  a13_naf_w12  a14_wavelet_w28  a15_naf_degv2  a16_naf_attn_degv2  a17_naf_dists0  a18_naf_dists0_strong  a19_final
+gaussian_noise                                     20.98          32.94             32.78                32.84                  32.88            32.93                31.97             32.83        32.57        32.14            32.67          32.87               32.82           32.94                  32.81      33.31
+poisson_noise                                      25.17          36.06             35.89                35.93                  35.94            36.12                35.05             35.93        35.59        35.15            35.71          36.01               35.92           36.04                  35.89      36.55
+salt_pepper                                        15.06          37.17             36.90                36.46                  38.00            35.85                31.78             36.75        36.50        34.32            34.44          37.01               37.20           37.98                  37.66      41.40
+speckle_noise                                      25.60          34.99             34.47                34.84                  34.89            34.76                33.58             34.82        34.56        33.87            34.62          35.03               35.02           34.87                  34.64      35.59
+gaussian_blur                                      30.63          33.98             33.87                33.69                  33.87            33.97                32.24             33.88        33.23        32.84            33.32          33.96               33.78           33.93                  33.56      35.19
+motion_blur                                        28.88          31.64             31.61                31.47                  31.36            31.87                29.19             31.54        30.87        29.47            31.01          30.91               30.77           31.27                  30.66      32.58
+defocus_blur                                       30.18          33.55             33.47                33.35                  33.46            33.81                31.34             33.57        33.03        32.03            32.95          33.49               33.54           33.38                  32.91      34.87
+jpeg                                               35.14          35.94             35.77                36.02                  36.04            36.04                35.49             35.94        35.90        35.72            35.72          36.10               36.04           36.06                  35.94      36.43
+chromatic_aberration                               29.62          39.15             38.88                38.99                  38.41            39.53                35.63             38.89        38.28        36.64            38.26          38.62               38.46           39.31                  38.73      40.55
+correlated_noise                                   22.71          30.36             30.10                30.27                  30.22            30.38                29.49             30.24        30.02        29.57            30.09          30.21               30.12           30.21                  30.03      30.77
+resize_blur                                        34.24          34.02             33.79                33.86                  34.05            34.62                33.49             34.01        33.62        33.43            33.94          33.91               33.86           34.22                  33.53      35.02
+small_artifacts                                    29.81          40.98             38.62                40.10                  40.57            40.51                34.16             39.63        38.18        35.60            37.52          39.44               39.49           40.11                  39.52      45.46
+gaussian_blur+gaussian_noise                       21.20          28.99             28.68                28.87                  28.88            28.97                28.10             28.95        28.65        28.42            28.73          28.92               28.85           28.84                  28.82      29.25
+motion_blur+gaussian_noise                         20.20          26.55             26.54                26.54                  26.48            26.67                25.57             26.55        26.21        25.86            26.36          26.29               26.23           26.34                  26.17      26.97
+defocus_blur+poisson_noise                         24.03          30.19             30.15                30.09                  30.15            30.23                29.56             30.16        29.98        29.71            30.03          30.18               30.06           30.11                  29.90      30.43
+gaussian_noise+jpeg                                24.44          33.90             33.82                33.90                  33.83            33.99                32.27             33.74        33.61        33.29            33.64          33.87               33.80           33.84                  33.64      34.30
+gaussian_blur+jpeg                                 29.32          31.89             31.72                31.71                  31.53            31.78                30.60             31.73        31.46        31.12            31.35          31.62               31.68           31.70                  31.49      32.18
+motion_blur+jpeg                                   28.14          29.81             29.88                29.75                  29.71            29.92                28.44             29.76        29.33        28.77            29.53          29.50               29.41           29.58                  29.32      30.27
+gaussian_blur+salt_pepper                          15.81          31.80             31.22                31.59                  31.72            31.24                29.11             31.68        30.88        30.02            30.42          31.40               31.20           31.74                  31.57      32.76
+defocus_blur+speckle_noise                         22.59          27.99             27.92                27.93                  27.96            27.98                27.25             27.95        27.77        27.43            27.82          27.93               27.77           27.88                  27.68      28.27
+poisson_noise+jpeg                                 30.18          34.71             34.52                34.68                  34.55            34.69                34.02             34.52        34.36        34.09            34.43          34.68               34.67           34.63                  34.55      35.03
+chromatic_aberration+gaussian_noise                21.21          32.01             31.63                32.01                  31.96            32.07                29.89             31.92        31.33        30.88            31.39          31.69               31.82           31.86                  31.71      32.55
+gaussian_noise+salt_pepper                         15.33          31.43             31.05                31.53                  31.58            31.07                29.75             31.48        31.03        30.66            30.71          31.46               31.34           31.56                  31.45      31.82
+chromatic_aberration+defocus_blur                  25.23          28.93             28.81                28.91                  28.80            29.09                27.18             28.95        28.41        27.70            28.26          28.79               28.75           28.86                  28.47      30.31
+gaussian_blur+gaussian_noise+jpeg                  23.83          29.39             29.43                29.46                  29.49            29.53                28.84             29.47        29.31        29.11            29.32          29.34               29.44           29.44                  29.25      29.84
+motion_blur+poisson_noise+jpeg                     25.20          28.30             28.30                28.31                  28.19            28.37                27.26             28.14        27.98        27.54            28.04          28.12               27.96           28.13                  27.87      28.67
+defocus_blur+speckle_noise+salt_pepper             15.84          30.85             30.66                30.77                  30.85            30.71                29.24             30.78        30.46        29.91            30.37          30.68               30.55           30.71                  30.57      31.38
+chromatic_aberration+gaussian_blur+gaussian_noise  22.20          31.05             30.88                30.96                  30.77            30.97                30.11             30.90        30.72        30.37            30.66          30.87               30.76           31.00                  30.80      31.29
+motion_blur+salt_pepper+jpeg                       17.12          28.16             28.19                28.25                  28.10            28.33                27.10             28.11        27.84        27.47            27.95          27.78               27.80           28.04                  27.78      28.63
+uniform_noise                                      22.17          32.50             32.30                32.48                  32.52            32.53                31.67             32.43        32.12        31.70            32.26          32.38               32.40           32.47                  32.32      32.87
+pixelate                                           26.88          27.13             27.04                27.10                  27.08            27.12                27.00             27.11        27.10        27.11            27.03          29.28               29.34           27.14                  27.11      29.64
+periodic_noise                                     27.97          30.44             29.95                31.83                  30.00            30.07                28.45             31.58        29.85        30.28            29.54          36.56               36.68           29.62                  28.65      39.91
+pixelate+uniform_noise                             21.38          26.70             26.65                26.67                  26.71            26.69                26.67             26.72        26.68        26.53            26.72          28.23               28.15           26.71                  26.65      28.60
+
+[compare] Comparison dashboard figure saved to /DATA1/shrusti/genai_project/results/comparison/comparison_dashboard.png
+
+======================================================================
+SUMMARY
+======================================================================
+  a19_final                  OK (17.36 h)
+======================================================================
+ALL DONE -- every GPU used by this command is now free.
+[run_plan 10-10 10:04:07] FINAL a19_final: PSNR 33.112  SSIM 0.8743  DISTS 0.1293  4.98 GFLOPs. Submission: /DATA1/shrusti/genai_project/results/a19_final/submission

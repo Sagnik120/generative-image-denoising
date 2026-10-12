@@ -1,8 +1,16 @@
 architecture,PSNR rank,SSIM rank,DISTS rank,GFLOPs rank,avg_rank
-a05_nafnet_v2,1.0,3.0,1.0,3.0,2.0
-a07_naf_attn_hybrid,3.0,1.0,3.0,2.0,2.25
-a11_freq_spatial,4.0,2.0,4.0,1.0,2.75
-a09_wavelet_naf,2.0,4.0,2.0,6.0,3.5
-a08_degradation_aware,5.0,5.0,5.0,4.0,4.75
-a06_restormer_v2,6.0,6.0,6.0,5.0,5.75
-a10_resflow_fewstep,7.0,7.0,7.0,7.0,7.0
+a19_final,1.0,1.0,1.0,9.0,3.0
+a15_naf_degv2,2.0,2.0,4.0,9.0,4.25
+a16_naf_attn_degv2,3.0,3.0,7.0,4.0,4.25
+a05_nafnet_v2,4.0,6.0,5.0,9.0,6.0
+a07_naf_attn_hybrid,6.0,4.0,8.0,6.0,6.0
+a11_freq_spatial,7.0,5.0,9.0,5.0,6.5
+a17_naf_dists0,9.0,8.5,3.0,9.0,7.375
+a09_wavelet_naf,5.0,7.0,6.0,14.0,8.0
+a18_naf_dists0_strong,11.0,11.0,2.0,9.0,8.25
+a12_naf_w16,12.0,12.0,12.0,2.0,9.5
+a08_degradation_aware,8.0,8.5,10.0,12.0,9.625
+a14_wavelet_w28,13.0,13.0,13.0,3.0,10.5
+a13_naf_w12,14.0,14.0,14.0,1.0,10.75
+a06_restormer_v2,10.0,10.0,11.0,13.0,11.0
+a10_resflow_fewstep,15.0,15.0,15.0,15.0,15.0
