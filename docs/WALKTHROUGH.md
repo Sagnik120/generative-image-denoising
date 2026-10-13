@@ -36,26 +36,39 @@ git push origin main
 
 ## 3. Run on the GPU machine
 
-```
-cd <repo on the GPU machine>
+```bash
+cd ~/genai_project/generative-image-denoising
 git pull origin main
+source venv/bin/activate
 ```
 
 **Dry run first** (about 10–15 minutes; 30 training steps per model, then the real evaluate, generative-eval and export steps; prints speed and peak memory per model):
 
-```
-python scripts/run_all.py --data_root <DATA> --archs a21_gan_wavelet a22_resdiff a20_gan a23_resdiff_2step --dry_run
+```bash
+python scripts/run_all.py \
+  --data_root /DATA1/shrusti/genai_project/datasets \
+  --results_root /DATA1/shrusti/genai_project/results \
+  --gpus 1 2 \
+  --allow_busy_gpu \
+  --archs a21_gan_wavelet a22_resdiff a20_gan a23_resdiff_2step \
+  --dry_run
 ```
 
-Check that all four say `OK`. If one says `FAILED`, send me `results/_dry_run/<model>/logs/console.log`.
+Check that all four say `OK`. If one says `FAILED`, check `results/_dry_run/<model>/logs/console.log`.
 
 **Real run, one command:**
 
-```
-nohup python scripts/run_all.py --data_root <DATA> --archs a21_gan_wavelet a22_resdiff a20_gan a23_resdiff_2step > run_round4.log 2>&1 &
+```bash
+nohup python scripts/run_all.py \
+  --data_root /DATA1/shrusti/genai_project/datasets \
+  --results_root /DATA1/shrusti/genai_project/results \
+  --gpus 1 2 \
+  --allow_busy_gpu \
+  --archs a21_gan_wavelet a22_resdiff a20_gan a23_resdiff_2step \
+  > run_round4.log 2>&1 &
 ```
 
-This uses both GPUs, one model per GPU. For each model it runs: train → evaluate (benchmarks v1 and v2) → generative evaluation (diversity, step counts) → export. When a GPU finishes a model it takes the next one. At the end it prints the comparison table and the generative-evaluation table into `run_round4.log`. Nothing else needs to be run by hand.
+This uses both GPUs (1 and 2), one model per GPU. For each model it runs: train → evaluate (benchmarks v1 and v2) → generative evaluation (diversity, step counts) → export. When a GPU finishes a model it takes the next one. At the end it prints the comparison table and the generative-evaluation table into `run_round4.log`. Nothing else needs to be run by hand.
 
 Useful while it runs:
 
