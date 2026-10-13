@@ -152,15 +152,6 @@ def dry_run_figures(arch, results_root):
 
 
 def main():
-    # If launched with system python where dependencies are missing, auto-switch to project venv if present
-    venv_py = PROJECT_ROOT / "venv" / "bin" / "python"
-    if venv_py.exists() and Path(sys.executable).resolve() != venv_py.resolve():
-        try:
-            import DISTS_pytorch
-        except ImportError:
-            print(f"[run_all] Python '{sys.executable}' missing dependencies; re-launching with venv python: {venv_py}", flush=True)
-            os.execv(str(venv_py), [str(venv_py)] + sys.argv)
-
     p = argparse.ArgumentParser(description="Train + evaluate + export a queue of architectures.")
     p.add_argument("--data_root", required=True)
     p.add_argument("--results_root", default=str(PROJECT_ROOT / "results"))
@@ -192,20 +183,8 @@ def main():
     log("data OK: " + ", ".join(f"{k}={len(v)}" for k, v in views.items()))
 
     # 2. download the DISTS backbone once, so parallel runs do not race on it.
-    try:
-        subprocess.check_call([sys.executable, "-c", "from DISTS_pytorch import DISTS; DISTS()"],
-                              cwd=str(PROJECT_ROOT))
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        try:
-            import DISTS_pytorch
-        except ImportError:
-            msg = f"[run_all] DISTS_pytorch is not installed in '{sys.executable}'."
-            if venv_py.exists():
-                msg += f"\nPlease activate your virtual environment:\n  source venv/bin/activate\nOr run with venv python:\n  {venv_py} scripts/run_all.py ..."
-            else:
-                msg += "\nPlease install it with: pip install DISTS-pytorch"
-            raise SystemExit(msg)
-        log("WARNING: pre-loading DISTS backbone failed. Proceeding with training...")
+    subprocess.check_call([sys.executable, "-c", "from DISTS_pytorch import DISTS; DISTS()"],
+                          cwd=str(PROJECT_ROOT))
 
     # 3. queue
     todo = []
