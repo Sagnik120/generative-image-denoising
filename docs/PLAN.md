@@ -1,255 +1,209 @@
-# Plan: a strictly generative model for the competition
+# Plan: strictly generative model (GAN and residual diffusion)
 
-Written 2026-10-11 (strict-generative revision). Replaces the earlier plan of the same date, which allowed a one-step model initialised from the regression network. Background and brief-by-line compliance: `CURRENT_STATUS.md`.
+Written 2026-10-14. Replaces the 2026-10-11 plan. Background: `PROJECT_REVIEW_AND_OPTIONS.md` (what was done, options, sources) and `CURRENT_STATUS.md`.
 
-## 1. Overview
+**Status: proposal for approval. No code is changed until you approve.**
 
-**Done.** Data for three domains (natural, low-light, medical), degradation pipeline v2 (22 families, random chains), two fixed benchmarks (v1: 396 images / 33 cases; v2: 96 images with unseen families), a loss set with one term per scored metric, 19 trained configurations and all tooling. Best model a19: 33.11 dB / 0.8743 SSIM / 0.1293 DISTS at 4.98 GFLOPs.
+---
 
-**Problem.** a19 is deterministic regression. The brief asks for a generative model. The three earlier generative attempts were weak for identifiable reasons: a03 (GAN from scratch, weak discriminator, −0.8 dB), a04 (diffusion from pure noise, collapsed), a10 (two half-size passes, no noise input, −1.6 dB).
+## 1. Decisions this plan follows
 
-**Decision.** Strictly generative models only (definition in §2).
+1. Model families: **conditional GAN** and **residual diffusion** first. **Diffusion + GAN** only if needed (§6.4).
+2. Frequency: **wavelet-domain discriminator and wavelet loss for the GAN**. No network that runs entirely in the wavelet or FFT domain.
+3. Losses: keep the **composite loss**; add only promising extras that cost no inference FLOPs and little code.
+4. FLOPs: **about 5 GFLOPs, never above ~5.1** for a submission. Smaller is allowed later.
+5. **Train from scratch.** a19's weights are not used. a19 and a15 are only reference numbers.
+6. Strictly generative: noise input, generative training loss from the first step, and a check that the noise really changes the output.
 
-**What we do now.** Screen four strictly generative candidates from scratch under the same benchmark and FLOPs budget; choose by the four ranked axes; train the winner long; reduce its sampling steps by distillation if that improves the ranks; then widen the degradations and export.
+---
 
-## 2. What "strictly generative" means
+## 2. Is ~5 GFLOPs a sensible size?
 
-A model qualifies only if all four hold. Each is checked by a measurement, not by description.
+Short answer: it is small by research standards and a defensible middle position for this competition, but nobody can know its rank without seeing the other teams. Reasons:
 
-| # | Criterion | Check |
-|---|---|---|
-| G1 | It defines a conditional distribution p(clean \| degraded) and **samples** from it: it has a random input | Noise is drawn inside the model call |
-| G2 | The noise **matters**: different seeds give different outputs | Sample diversity: mean per-pixel standard deviation over 8 seeds on the benchmark must be clearly above zero (our threshold: ≥ 0.5 grey level of 255; report the number) |
-| G3 | It is trained with a **generative objective** from the first step: denoising / flow matching over a noise schedule, an adversarial loss, or an ELBO | Stated in the config and the report; no reconstruction-only model is deployed |
-| G4 | Inference uses the **family's sampler** (reverse diffusion steps, ODE/SDE steps, or a generator fed with noise) | The sampler module is what gets exported |
+- **Compared with published restoration networks at 256×256** (approximate, from the papers; check before quoting): DnCNN ≈ 35 GFLOPs, NAFNet-32 ≈ 16, NAFNet-64 ≈ 65, Restormer ≈ 140. Diffusion restorers are far higher because of their steps. At 5 GFLOPs we are 3–30× below the usual baselines a team would start from.
+- **Our own size study** (regression, 60k steps): 5.0 → 2.3 GFLOPs cost 0.49 dB, 0.008 SSIM, 0.014 DISTS; 2.3 → 1.3 cost a further 0.57 dB. The price per GFLOP removed triples below 2.3. So 5 is on the flat part of the curve and ~2.3 is the lowest sensible point.
+- **Scoring**: FLOPs is one of four ranked axes; the other three are quality and move together. Giving up 0.5 dB loses rank on three axes against every team within 0.5 dB of us, and gains FLOPs rank only against teams between 2.3 and 5 GFLOPs.
+- **Generative models pay extra for small size**: a generative model already loses some PSNR against regression, so starting it at half capacity stacks two losses.
 
-Excluded by this definition: a19 and every other regression model; a10 as built (fails G1, G2); a flow model run in one step with the degraded image supplied clean to the network and a reconstruction loss only (the optimal network ignores its noise, so it fails G2); a regression network fine-tuned briefly and relabelled.
+Plan: develop at ~5 GFLOPs. Once a final model exists, train its width-16 sibling (2.3 GFLOPs) as an optional second candidate (§8, step 4). The choice between them can then be made with real numbers, and with whatever is known about the other teams by then.
 
-Constraints from the brief that apply to any sampler:
+---
 
-- The only input is one 256×256×3 image (§2). Noise, time steps and all sampling iterations run inside `forward`.
-- FLOPs are measured on that call (§5), so **K steps cost K× FLOPs**.
-- The noise must be seeded; the output must be reproducible and uint8.
-- PSNR, SSIM and DISTS are all full-reference (§5). No axis rewards realism that departs from the true image.
-- Four axes ranked independently, "try to be the best on each" (§6).
+## 3. Data (kept exactly as it is)
 
-## 3. Analysis: the price of sampling, and how to keep it small
+Nothing changes in screening, so new results stay comparable with a15/a19.
 
-### 3.1 Theory
+- **Clean images**: the ten sources and sampling weights in `src/common/dataset.py` (natural 70%, medical 20%, low-light real + 10% synthetic darkening), 256×256 crops, flips/rotations, 4% grey.
+- **Corruptions**: pipeline **v2** (22 families: 9 listed + 13 extra; 0–4 per image with probabilities 8/34/36/17/5%; severity Beta(1.0, 1.8); 50% random order; 65% of picks from the nine listed families).
+- **Testing**: benchmark v1 (396 images, 33 cases) and benchmark v2 (96 images; unseen families film grain, glass blur, line dropout).
+- **Later, on the final model only** (§8 step 3): widen the corruption list (v3), because coverage was worth 3–8 dB per added family.
 
-1. **Regression gives the posterior mean; a sampler does not.** The output that minimises mean squared error (maximises PSNR) is E[x | y]. A model that draws exact samples x̂ ~ p(x | y) has expected squared error exactly twice the minimum, i.e. **−3.01 dB** (Blau & Michaeli, 2018). This is the worst case for a strict sampler on the PSNR axis.
-2. **The loss depends on how wide the posterior is.** Where the clean image is almost determined by the input (mild noise, sparse impulses, small artifacts, chromatic shift) the posterior is narrow and mean and samples nearly coincide. Where information is destroyed (heavy blur + noise, strong JPEG, pixelation) the posterior is wide and the gap approaches 3 dB. From our benchmark: single-family cases should lose little, pair/triple cases most.
-3. **There is an optimal trade-off curve between "minimum error" and "perfect realism"**, and it is reached by interpolating between the posterior mean and a posterior sample (Freirich et al., 2021). Samplers with less injected randomness sit nearer the low-error end.
-4. **DISTS behaves differently from PSNR/SSIM.** DISTS compares deep-feature statistics and tolerates resampled texture (Ding et al., 2020). Posterior-mean outputs are over-smooth in wide-posterior cases; samples restore texture. So a sampler can gain on DISTS what it loses on PSNR. With three quality axes, losing two and gaining one is a net loss unless the PSNR/SSIM cost is small, so the target is: **low sampling variance, just enough to help DISTS.**
+---
 
-### 3.2 Consequences for design
+## 4. Shared parts of both models
 
-| Design choice | Reasoning | Evidence |
-|---|---|---|
-| **Start the process at the degraded image plus small noise, not at pure noise** | The input is already at 24.5 dB. The generative path then only has to cover the residual, so few steps suffice and the injected variance is small | Bridge / residual-diffusion papers reach 1–15 steps where SR3 needs ~100+; our a04 (pure noise, 8 steps) collapsed |
-| **Predict the clean image, not the noise** | Stable at few steps in pixel space; lets SSIM and DISTS losses act on the prediction | ResShift, InDI, Li & He (2025); a04 used noise-prediction |
-| **Few steps (K = 1–4)** | FLOPs = K × per-step. Per-step capacity is expensive to give up: halving FLOPs cost 0.49 dB, quartering 1.05 dB | Our size study (a12, a13); a10 (2 × 2.5 GFLOPs) scored below a13 (1 × 1.3 GFLOPs) |
-| **Small noise scale** | Sets the sampler's position on the perception–distortion curve (3.1.3) | ResShift's κ, InDI's ε play this role |
-| **Adversarial term on the sampled output** | Makes few-step samples sharp and forces the network to use its noise (G2); the main tool of one- and few-step generative models | DDGAN (Xiao et al., 2022), ADD, DMD2, SinSR-style distillation |
-| **Keep the image losses (Charbonnier, FFT, SSIM, DISTS)** as the form of the denoising loss on the clean-image prediction | A diffusion/flow loss is a weighted regression of the clean image from x_t; the metric is our choice. One term per scored axis worked in rounds 2–3 | a15/a19; a17/a18 for the weights |
-| **Keep the NAF U-Net, width 24, v2 data, long schedule** | Backbone, data and training length were the measured levers; none depends on the objective | Rounds 2–3 |
+**Backbone (generator / denoiser).** The NAF U-Net already used for a05/a15/a19: width 24; encoder [2, 2, 2, 4] NAF blocks at 256/128/64/32 px; 3 blocks at 16 px; decoder [1, 1, 1, 2]; channels 24-48-96-192-384; output = input + predicted correction. 4.98 GFLOPs, 5.5 M parameters. Rounds 2–3 showed nothing beats it at this size.
 
-### 3.3 What can and cannot be known in advance
+**Training setup (unchanged).** Batch 16, AdamW, learning rate 4e-4 with cosine decay to 1e-6, 1k warm-up steps, EMA 0.999 of the generator, mixed precision, gradient clipping 1.0. Screening runs: 60k steps (same as a15, so directly comparable). Final run: 200k steps.
 
-Known: per-step capacity costs (size study); data and schedule effects. Unknown until measured: (a) the PSNR/SSIM cost of real sampling on our mix of narrow and wide posteriors; (b) whether sampling buys DISTS; (c) whether one stochastic step is enough for G2 or whether K ≥ 2 is needed. Step 1 is designed to measure exactly these three.
+**Composite loss (unchanged, applied to the model's clean-image output).** Charbonnier × 1.0 + FFT × 0.05 + (1 − SSIM) × 0.2 + DISTS × 0.1 (DISTS on from 50% of training, on 4 images per batch). It suits both models: both output a clean-image estimate that these terms can be applied to.
 
-## 4. Literature review
+**Inference wrapper.** One module whose `forward(image)` draws seeded noise, runs every sampling step, and returns the image. FLOPs are counted on this module, so nothing is hidden.
 
-Citations are from memory; verify venue and year before using them in the report.
+**New measurement: sample diversity.** Run each benchmark image with 8 seeds; report the mean per-pixel standard deviation (in grey levels of 255). This is the proof that the model is generative and not a relabelled regression network. Threshold used for eligibility: ≥ 0.5.
 
-### 4.1 Denoising and restoration backbones (non-generative context)
+---
 
-| Work | Point | Relevance |
-|---|---|---|
-| DnCNN (Zhang et al., TIP 2017) | Residual learning for Gaussian denoising | Residual prediction, kept |
-| Restormer (Zamir et al., CVPR 2022); SwinIR (Liang et al., 2021) | Transformer restoration | Our a06: worse than NAF at equal FLOPs |
-| NAFNet (Chen et al., ECCV 2022) | Plain conv block matches transformers at far lower cost | Our backbone |
-| BSRGAN (Zhang et al., ICCV 2021); Real-ESRGAN (Wang et al., 2021) | Randomly shuffled degradation chains generalise to real corruption | Basis of our pipeline v2 |
-| AirNet (CVPR 2022); PromptIR (NeurIPS 2023); DA-CLIP (ICLR 2024) | All-in-one restoration with degradation prompts | Small gains over a strong backbone; our a08 agrees. Not used |
+## 5. Model 1: conditional GAN
 
-### 4.2 Theory of generative restoration
+### 5.1 Design
 
-| Work | Point | Relevance |
-|---|---|---|
-| Blau & Michaeli, CVPR 2018 | Perception–distortion trade-off; posterior sampling has 2× MMSE | Upper bound on the cost of strictness (−3 dB) |
-| Freirich et al., NeurIPS 2021 | Optimal trade-off = interpolation between mean and sample | Noise scale and step count as a controlled knob |
-| Ohayon et al., *Posterior-Mean Rectified Flow*, ICLR 2025 | Best error under perfect realism: predict the mean, then transport it to the image distribution | Shows hybrids are principled, but they contain a regression stage; see §5 "not chosen" |
+```
+                 noise (new each call)
+                    |  added inside every block, with a learned strength
+                    v
+corrupted image --> NAF U-Net generator --> restored image
+      |                                          |
+      +------------------+-----------------------+
+                         v
+              discriminator (training only)
+        "is this the true clean image for this input?"
+```
 
-### 4.3 Diffusion models for restoration
+- **Generator.** The backbone of §4 plus **noise injection**: after each NAF block, add one channel of Gaussian noise multiplied by a learned per-channel strength (starts at zero, so training begins stable and the network learns how much randomness to use). Idea from StyleGAN (Karras et al., CVPR 2019). Cost: additions only, FLOPs unchanged at ~4.98.
+- **Discriminator (training only, zero inference FLOPs).** U-Net with spectral normalisation, as in Real-ESRGAN (Wang et al., ICCVW 2021): it returns a real/fake score for every pixel, which gives the generator local feedback and is stable on mixed corruptions. It is **conditional** (Pix2Pix, Isola et al., CVPR 2017): it sees the corrupted input together with the candidate, so it judges "right restoration of this input", not just "looks like a photo".
+- **Why this should not repeat a03's failure.** a03 used a small 3-layer PatchGAN, L1 only, no SSIM/DISTS anchor, full adversarial weight from step 0, and old data. Each of those is changed here.
 
-| Work | Formulation | Steps | Relevance |
-|---|---|---|---|
-| DDPM (Ho et al., NeurIPS 2020); score SDE (Song et al., ICLR 2021); EDM (Karras et al., NeurIPS 2022) | A diffusion model is a denoiser trained over noise levels | 35–1000 | Foundation: our task is literally the network's training task, generalised from Gaussian noise to arbitrary corruption |
-| SR3 (Saharia et al., TPAMI 2022); Palette (SIGGRAPH 2022) | Conditional diffusion from pure noise, degraded image concatenated | 100–1000 | Too many steps; a04 was a small version and failed |
-| Whang et al., *Deblurring via Stochastic Refinement*, CVPR 2022 | Regression predictor + diffusion on the residual; sample averaging trades realism for PSNR | ~10–500 | Documents the PSNR cost of sampling and how to buy it back |
-| DDRM (Kawar et al., NeurIPS 2022); DPS (Chung et al., ICLR 2023); DDNM | Unconditional prior + known degradation operator | 20–1000 | Not applicable: our degradations are unknown and mixed |
-| Cold Diffusion (Bansal et al., NeurIPS 2023) | Diffusion with arbitrary degradations instead of Gaussian noise | few–many | Conceptual base for "start at the degraded image" |
-| InDI (Delbracio & Milanfar, TMLR 2023) | Straight path degraded → clean, small noise; one step = regression, more steps = more realism | 1–100 | Describes the step knob exactly; also shows why one deterministic step is not generative |
-| I2SB (Liu et al., ICML 2023) | Schrödinger bridge between degraded and clean | ~10–1000 | Bridge formulation |
-| IR-SDE (Luo et al., ICML 2023) | Mean-reverting SDE whose end state is degraded + noise | ~100 | Same idea, SDE form |
-| **ResShift (Yue et al., NeurIPS 2023)** | Markov chain shifting the *residual*, end state N(degraded, κ²I), clean-image prediction | 15, later 4 | **Template for our a20**: built for few steps |
-| RDDM (Liu et al., CVPR 2024) | Separate residual and noise diffusion | 5–10 | Variant of the same |
-| DiffUIR (Zheng et al., CVPR 2024) | One residual-diffusion model for several degradation types | few | Closest to our all-in-one setting |
-| DiffIR (Xia et al., ICCV 2023) | Diffusion on a compact prior vector guiding a restoration transformer | 4 | Efficient, but two-stage and the image path is regression; not chosen |
-| StableSR, DiffBIR, SUPIR, OSEDiff (2023–2024) | Pretrained Stable Diffusion as prior | 1–50 | Roughly two orders of magnitude above our FLOPs; low PSNR; VAE harms medical detail. Rejected |
+### 5.2 Losses
 
-### 4.4 Flow matching and few-step / one-step generation
+Included from the start:
 
-| Work | Point | Relevance |
-|---|---|---|
-| Flow Matching (Lipman et al., ICLR 2023); Rectified Flow (Liu et al., ICLR 2023) | Straight probability paths, ODE sampling, few steps | Equivalent training form for a20; deterministic sampler variant |
-| DDIM (Song et al., ICLR 2021) | Fewer steps from the same trained model | K is a test-time choice: one training run gives K = 1, 2, 4 |
-| Progressive Distillation (Salimans & Ho, ICLR 2022) | Halve the step count repeatedly by distillation | Step 3 |
-| Consistency Models (Song et al., ICML 2023); MeanFlow (Geng et al., 2025) | One-step samplers that remain generative (noise → sample) | Step 3; a one-step model that still satisfies G1–G4 |
-| DDGAN (Xiao et al., ICLR 2022) | Large denoising steps modelled by a conditional GAN: 2–4 steps | **Template for a23** |
-| ADD (Sauer et al., 2023); DMD / DMD2 (Yin et al., 2024) | One-step diffusion via adversarial / distribution-matching losses | a23, step 3 |
-| SinSR (Wang et al., CVPR 2024) | Distils ResShift to one step | Direct precedent for step 3 on our a20 |
+- **Composite loss** (§4), unchanged. It anchors PSNR, SSIM and DISTS.
+- **Adversarial loss, hinge form** (Miyato et al., "Spectral Normalization for GANs", ICLR 2018). On from step 0 with its weight ramped up linearly over the first 5k steps, so the generator is trained adversarially from the beginning but the first chaotic steps are damped. Weight: small. The pixel losses are around 0.02–0.05 in size while the adversarial term is around 1, so the starting weight is 0.005, to be fixed in a short smoke run so that the adversarial gradient is roughly 10–20% of the reconstruction gradient.
+- **R1 gradient penalty on the discriminator**, applied every 16 steps (Mescheder et al., ICML 2018). Keeps the discriminator from overpowering the generator across our three very different domains. A few lines of code.
 
-### 4.5 GANs
+Frequency add-on (variant a21, §5.3):
 
-| Work | Point | Relevance |
-|---|---|---|
-| pix2pix (Isola et al., CVPR 2017) | Conditional GAN, PatchGAN discriminator; noted that the generator tends to ignore input noise | a03 copied it; the noise-ignoring problem is why G2 is measured |
-| SRGAN (Ledig et al., CVPR 2017); ESRGAN (Wang et al., 2018) | Adversarial + perceptual loss; lower PSNR, sharper output | Quantifies the trade; shows a short reconstruction warm-up is standard |
-| Real-ESRGAN (Wang et al., 2021) | U-Net discriminator with spectral norm, stable on mixed degradations | Discriminator for a22/a23 |
-| StyleGAN (Karras et al., CVPR 2019) | Per-layer noise injection drives stochastic detail | Noise injection for a22 |
-| DeblurGAN-v2 (Kupyn et al., ICCV 2019) | GAN deblurring, efficient backbones | Precedent for blur |
+- **Wavelet-domain discriminator.** The discriminator's input is the three high-frequency Haar bands (horizontal, vertical, diagonal detail) of the candidate and of the corrupted input, instead of RGB. Noise, blur and compression artifacts all live in those bands, so the discriminator concentrates on exactly what distinguishes a good restoration.
+- **Wavelet fidelity loss.** L1 between the Haar bands of output and target, weight 0.05, added to the composite loss.
+- Source for both: Korkmaz, Tekalp & Dogan, "Training Generative Image Super-Resolution Models by Wavelet-Domain Losses Enables Better Control of Artifacts", CVPR 2024. They report fewer invented textures and a better PSNR-vs-perceptual balance than RGB or Fourier losses.
+- Suitability: yes. It is training-only (no FLOPs), the Haar transform is already in our code (`haar_dwt`), and it targets our main worry about GANs, losing PSNR to invented detail. One limit to know: a discriminator that sees only high-frequency bands cannot judge colour or brightness errors; those remain the job of the composite loss, which is why that loss stays.
 
-### 4.6 Other generative families
+Held back as optional (only if the GAN shows the specific problem):
 
-| Family | Works | Verdict |
-|---|---|---|
-| VAE | DivNoising (Prakash et al., ICLR 2021), HDN | Samples are blurry, weak on all three quality metrics; rejected |
-| Normalising flows | SRFlow (Lugmayr et al., ECCV 2020), Noise Flow | Invertibility forces large networks at full resolution; rejected on FLOPs |
-| Autoregressive | – | One pass per pixel/token; rejected on FLOPs |
+- **LDL artifact loss** (Liang et al., CVPR 2022): extra penalty where the output looks like an artifact. Use if the GAN's PSNR is more than ~0.5 dB below the diffusion model or artifacts are visible.
+- **Discriminator feature-matching loss** (pix2pixHD, Wang et al., CVPR 2018): use if training is unstable.
+- **Focal frequency loss** in place of the plain FFT term (Jiang et al., ICCV 2021): a tuning experiment for the final model, not for screening.
 
-### 4.7 What the literature says, in short
+Not adding several of these at once is deliberate: if five new losses go in together and the result changes, we cannot tell which one did it.
 
-- For restoration, the efficient generative models are residual/bridge diffusions and GANs; both work in 1–4 network evaluations.
-- Every strict sampler pays PSNR against regression; the papers that report both (Whang et al., ResShift, SinSR, ESRGAN) show it. Few steps, small noise and sample-consistent training reduce it.
-- One-step models stay generative when obtained by consistency or adversarial training from a diffusion, not by dropping the noise.
+### 5.3 Two GAN runs
 
-## 5. Candidates
+- **a20_gan**: generator + RGB U-Net discriminator + composite + hinge + R1.
+- **a21_gan_wavelet**: same, with the wavelet-domain discriminator and the wavelet fidelity loss.
 
-All share: NAF U-Net (a05/a19 layout) with a time embedding and a noise path; degradation pipeline v2; batch 16, AdamW 4e-4 cosine, EMA; **trained from scratch** with the generative objective throughout; whole sampler inside `forward`.
+The pair measures exactly what the wavelet idea is worth.
 
-**Diffusion formulation (a20, a21, a23)**, after ResShift. With clean x₀, degraded y, schedule 0 = η₀ < … < η_T = 1 and noise scale κ:
+---
 
-- forward: x_t = x₀ + η_t·(y − x₀) + κ·√η_t·ε, so x_T ~ N(y, κ²I);
-- network f(x_t, y, t) predicts x₀; loss = Charbonnier + 0.05 FFT + 0.2 SSIM + 0.1 DISTS on the prediction, t sampled over the schedule;
-- reverse (stochastic): x_{t−1} = (η_{t−1}/η_t)·x_t + (1 − η_{t−1}/η_t)·x̂₀ + κ·√(η_{t−1}(η_t − η_{t−1})/η_t)·ξ;
-- K-step sampler: draw x_T = y + κε, apply K reverse steps on a sub-schedule. κ starts at 0.1 (on a 0–1 scale) and is one of the things tuned.
+## 6. Model 2: residual diffusion
 
-| ID | Model | Sampler | Total GFLOPs | Purpose |
-|---|---|---|---|---|
-| a20 | Residual diffusion, width 24 | K = 1, 2, 4 from one checkpoint | 5 / 10 / 20 | The perception–distortion–FLOPs curve of real diffusion sampling at full per-step capacity |
-| a21 | Residual diffusion, width 16 | K = 2 | ~4.6 | Multi-step at **equal FLOPs** to a19; a correctly built version of a10 (stochastic, proper depth) |
-| a22 | Noise-conditioned GAN, width 24 | 1 generator pass | ~5 | Strict GAN: per-layer noise injection, conditional U-Net discriminator (spectral norm), hinge loss + image losses; adversarial weight ramped in over the first 10% of training |
-| a23 | Diffusion-GAN, width 24 | K = 1 and 2 | 5 / 10 | a20 plus an adversarial loss on the *sampled* x_{t−1} (DDGAN): the discriminator sees (x_{t−1}, x_t, y, t). Aims at few-step sharpness and at making the noise matter in one step |
+### 6.1 Idea
 
-Why these four: they cover the two efficient strict families (diffusion, GAN), their combination, and the one design question the size study cannot answer (one big step vs two smaller ones under sampling). Each differs from the next by one thing.
+Ordinary diffusion starts from pure noise and needs many steps; our a04 did that and collapsed. Residual diffusion (ResShift, Yue et al., NeurIPS 2023) defines the noising process so that it ends at **corrupted image + a little noise**. The reverse process then only has to remove the difference between corrupted and clean, which needs very few steps.
 
-**Not chosen**, with reasons:
+```
+Training (forward process, T = 4 levels):
+  clean x0 --------------------------------------------> corrupted y + noise
+  level t:   x_t = x0 + eta_t * (y - x0) + kappa * sqrt(eta_t) * noise
+             eta goes 0 -> 1, so x_t slides from clean to (corrupted + noise)
 
-| Option | Reason |
-|---|---|
-| Diffusion from pure noise (SR3-style) | Many steps; a04; every bridge paper improves on it. One optional run (a24, 4 steps, width 12) only if a baseline is wanted for the report |
-| Deterministic one-step flow (InDI K=1, rectified flow from y) | Equals regression; fails G1/G2 |
-| Predict-then-refine (regression + small diffusion; Whang et al., PMRF) | Half the model is a regression network; conflicts with the strict decision and pays FLOPs for two networks. Fallback only if a20–a23 all lose > 1.5 dB |
-| Pretrained latent diffusion | FLOPs, PSNR, medical detail (§4.3) |
-| VAE, normalising flow, autoregressive | §4.6 |
-| Zero-shot priors (DDRM, DPS) | Need the degradation operator |
+  network( x_t , y , t )  -->  estimate of clean x0      (loss on this estimate)
 
-## 6. Steps
+Sampling (reverse, K steps):
+  start: x = y + kappa * noise
+  repeat K times: estimate x0, move x part of the way towards it, add a little fresh noise
+  output: last estimate of x0
+```
 
-### Step 0. Preparation (no GPU)
+### 6.2 Design
 
-Code to be written and reviewed before any run (nothing is changed yet):
+- **Network.** The backbone of §4 with two small changes: (a) input is 6 channels, the current noisy image `x_t` and the corrupted image `y` side by side (the conditioning used by SR3 and ResShift); (b) a **time embedding** tells each block which noise level it is at (the layers for this already exist in our code and were used by a10). Output = `y` + predicted correction = estimate of the clean image. FLOPs ≈ 5.0 per step.
+- **Clean-image prediction**, not noise prediction. This is what ResShift does, it is stable with few steps, and it lets the composite loss act directly on the output. It is the main fix compared with a04.
+- **Noise schedule.** T = 4 levels, noise scale κ = 0.1 on a 0–1 pixel scale (a starting value; one of the two things to tune later, see §6.3).
+- **Stochastic sampler** from ResShift, with seeded noise, inside the model call.
 
-1. Time embedding and noise path in the shared network (a10's `ResFlowNet` already has the time embedding and the 6-channel input).
-2. Residual-diffusion bundle: forward process, loss, stochastic K-step sampler module with seeded noise inside `forward`.
-3. Conditional U-Net discriminator, hinge loss, ramp schedule; DDGAN-style step discriminator for a23 (the trainer already logs generator/discriminator losses from a03).
-4. Evaluation: metrics at each K; **diversity** (G2); metrics of the 8-sample average (shows the mean–sample gap for the report); clean-input test.
-5. FLOPs counted on the sampler module with fvcore and ptflops.
-6. `run_plan.py` entries and the rules below.
+### 6.3 Losses
 
-Sanity checks before the long runs: a 2k-step smoke run per candidate; sampler reproducible with a fixed seed; FLOPs scale as K×.
+Included from the start:
 
-### Step 1. Screening, round 4 (4 runs, 60k steps each, ~5–6 h each, parallel across GPUs)
+- **Composite loss on the clean-image estimate at a random level t.** This is the diffusion training objective (regress the clean image from a noised point) with our metric-matched terms in place of plain MSE. Half of each batch is at the last level (the starting point of sampling, always used at inference), half at random levels.
+- **Self-prediction training** (already in a10's code): for half the batches, build `x_t` from the network's own first estimate instead of the true clean image, so that later sampling steps are trained on the kind of input they will actually receive. Matters only when more than one step is used.
 
-a20–a23, from scratch, v2 data. 60k steps makes them directly comparable with a15 (regression, 32.03 / 0.8594 / 0.1537, `unseen_v2` 30.99), which is the yardstick for "price of being generative".
+Frequency add-on for diffusion:
 
-Measured for every candidate and every K: PSNR, SSIM, DISTS, GFLOPs, diversity, per group and domain, `unseen_v2`.
+- **Wavelet fidelity loss** (same L1 on Haar bands, weight 0.05). It has no discriminator to pair with here, so its expected effect is smaller than for the GAN. To avoid confusing the comparison it is **not** in the screening run; it is added to the final model only if a21 shows the wavelet loss helps.
 
-Rules, fixed now:
+Held back as optional:
 
-| # | Rule |
-|---|---|
-| R1 | **Eligibility:** satisfies G1–G4 with diversity ≥ 0.5/255. A configuration that fails G2 is not a candidate at that K, whatever its PSNR |
-| R2 | **FLOPs cap:** total ≤ 5.1 GFLOPs for the default entry. Configurations above it (a20 at K=2, 4) are measured for information and as distillation teachers |
-| R3 | **Selection:** among eligible configurations under the cap, rank each of PSNR, SSIM, DISTS, FLOPs separately (as the competition does) and take the best average rank; ties go to higher `unseen_v2` PSNR |
-| R4 | **Domain safety:** reject a configuration that is > 0.5 dB below the candidate average in medical or low-light (adversarial artefacts) |
-| R5 | **If the best eligible model is > 1.0 dB below a15:** before the long run, tune κ (0.05, 0.2) and the adversarial weight on the winner in two extra 60k runs |
-| R6 | **If a20 at K=2 or 4 beats every ≤5 GFLOPs configuration by ≥ 0.5 dB or ≥ 0.01 DISTS:** it becomes the teacher for step 3 |
+- **Min-SNR loss weighting** (Hang et al., ICCV 2023): balances noise levels. With only 4 levels and clean-image prediction the benefit is small; use only if training is slow or unstable.
+- **Focal frequency loss**: as for the GAN, a final-stage tuning experiment.
+- **Adversarial loss on the sampled steps**: that is the diffusion + GAN model, §6.4.
 
-What each comparison answers:
+### 6.4 Two diffusion runs, and the FLOPs question
 
-| Comparison | Question |
-|---|---|
-| a20 K=1 vs K=2 vs K=4 | Does more sampling help DISTS enough to justify the PSNR and FLOPs? (expected: PSNR falls, DISTS improves, with K) |
-| a21 (2 × 2.3) vs a20 K=1 (1 × 5) | One big step or two smaller ones at equal FLOPs |
-| a22 vs a20 K=1 | GAN vs diffusion as the one-pass strict model |
-| a23 vs a20 | What the adversarial term adds to diffusion at 1–2 steps, and whether it produces diversity |
-| all vs a15 | The measured price of being generative on our benchmark |
+One step costs ~5 GFLOPs with the full backbone. To respect the ~5 GFLOPs limit there are two ways to run it, and they answer different questions:
 
-Expectations (to test, not promises): eligible one-pass models 0.3–1.0 dB below a15 with DISTS equal or better; a21 below a20 K=1 by ~0.5 dB (per-step capacity); pure diffusion at K=1 may fail G2 because the network can read the clean condition and ignore the noise, in which case a23 or K=2 carries the diffusion line.
+- **a22_resdiff**: width 24. Submittable setting: **1 step (5.0 GFLOPs)**. The same checkpoint is also evaluated at 2 and 4 steps (10 and 20 GFLOPs) for information only: it shows what more sampling would buy.
+- **a23_resdiff_2step**: width 16, **2 steps (≈ 4.6 GFLOPs)**. A true multi-step sampler inside the budget.
 
-### Step 2. Long run of the winner (1 run, 200k steps, ~17–22 h)
+Known risk, stated plainly: in a22 at 1 step the network sees a clean copy of `y`, so it can learn to ignore the noise. Its output would then be the same for every seed, which fails the diversity check and is not strictly generative. a23 does not have this problem (its second step works on its own noisy intermediate), but each of its steps has less than half the capacity.
 
-Same configuration as the screening winner, from scratch, 200k steps (the schedule that gave regression +1.08 dB). Adversarial terms, if any, keep their screening weights. Output: a25, the first submission-grade generative model. Re-check R1 and R4.
+**When diffusion + GAN is needed.** If a22 at 1 step fails the diversity check **and** a23 is clearly worse than the GANs, the next model is a22 with an adversarial loss on its sampled step (Denoising Diffusion GAN, Xiao et al., ICLR 2022), reusing the discriminator from §5. That forces the single step to use its noise. It is one extra run and is not started unless this condition is met.
 
-### Step 3. Fewer steps by distillation (only if rule R6 fired or the winner uses K ≥ 2; ~8–10 h)
+---
 
-Distil the K-step teacher into a student of the same network run at K/2 (then K/4) steps: consistency or SinSR-style, the student still receives noise and is trained to match the teacher's sample for the same noise, with the adversarial term kept to preserve sharpness and diversity. The student remains a generative sampler (G1–G4) at a fraction of the FLOPs.
+## 7. How the winner is chosen
 
-- **Rule:** accept the student if PSNR/SSIM/DISTS are within 0.1 dB / 0.002 / 0.003 of the teacher and diversity stays above the R1 threshold.
+For every run: PSNR, SSIM, DISTS on benchmarks v1 and v2 (overall, by group, by domain), GFLOPs, diversity.
 
-### Step 4. Improvements on the chosen model
+1. **Eligible** = diversity ≥ 0.5 grey levels and total FLOPs ≤ 5.1 GFLOPs.
+2. Among eligible configurations, rank PSNR, SSIM, DISTS and FLOPs separately (as the competition does); best average rank wins. Ties go to the better unseen-family (v2) PSNR.
+3. Reject a model that is more than 0.5 dB below the others on medical or low-light images (sign of adversarial artifacts).
+4. Reference only: a15 (32.03 dB / 0.8594 / 0.1537 at 60k steps) shows how much the generative requirement costs.
 
-1. **Diagnostics (1 h):** per-severity and clean-input test (a generative model must not repaint clean images: output on clean inputs > 45 dB); implementation-shift test (`skimage.util.random_noise`, OpenCV vs PIL JPEG, chroma subsampling variants).
-2. **Degradation pipeline v3 (one long fine-tune, ~15 h):** more families (ImageNet-C style glass/zoom blur and spatter, film grain, line dropout, grey vs per-channel and spatially varying noise, JPEG variants, MRI/ultrasound/X-ray artifacts), more 3–4-step chains, more JPEG; new held-out families for a benchmark v3. Coverage was worth 3–8 dB per added family in round 3 and is the main lever for the private set.
-3. **Noise scale and sampler tuning at test time (no training):** κ and the amount of reverse-step noise can be lowered at inference within G2; pick the point with the best average rank.
-4. **Small sibling (~12 h):** the same generative model at width 16 (2.3 GFLOPs), distilled from the final model, as a second entry if allowed.
+What to expect, so results can be read sensibly (expectations, not promises): eligible models roughly 0.3–1.0 dB below a15 in PSNR, DISTS equal or better; a21 a little better than a20; a23 below a22 in PSNR.
 
-### Step 5. Submission and report
+---
 
-- Export the sampler module (seeded noise inside), uint8 output, standard weight format; FLOPs by both counters; CPU test from a clean checkout on a colour, a grey-replicated and a clean image.
-- Report, 1–2 pages, in the brief's order: **architecture** (NAF U-Net denoiser, time and noise inputs, sampler, FLOPs); **training objective** (residual diffusion loss, adversarial loss, schedule); **degradations** (families, chains, severities). Evidence: round-4 table, curve over K, diversity, mean-of-samples vs single sample, unseen-family results, a15/a19 as non-generative reference.
+## 8. Steps and time
 
-## 7. Budget and order
+**Step 0. Code (after approval), then 2k-step smoke runs of each model.**
+- Noise injection in the generator; U-Net spectral-norm discriminator (RGB and wavelet input); hinge loss, R1, ramp.
+- Residual-diffusion training loop and seeded few-step sampler (extends a10's bundle).
+- Wavelet fidelity loss.
+- Diversity measurement and multi-step evaluation; new entries in `run_plan.py`.
+- Smoke-run checks: losses fall, sampler is reproducible with a fixed seed, FLOPs are as expected, adversarial weight calibrated.
 
-| Order | Work | GPU time |
-|---|---|---|
-| 1 | Step 0 code + smoke runs | < 1 h |
-| 2 | Step 1: a20–a23 in parallel | ~22 GPU-h total, ~6 h wall on 4 GPUs |
-| 3 | (R5 only) two tuning runs | ~11 h |
-| 4 | Step 2: long run | ~17–22 h |
-| 5 | Step 3: distillation, if triggered | ~8–10 h |
-| 6 | Step 4: diagnostics, v3, sibling | ~1 + 15 + 12 h |
-| 7 | Step 5 | ~1 h |
+**Step 1. Screening: a20, a21, a22, a23.** 60k steps each, from scratch, v2 data. About 5–7 h each; in parallel on separate GPUs about 7 h in total, otherwise about 24 h one after another. Then apply §7. Run the diffusion + GAN model only if the §6.4 condition is met (one more run).
 
-Short version if time is tight: a20 and a23 only → long run of the better → step 5.
+**Step 2. Final model.** The winner, from scratch, 200k steps (about 17–24 h). The long schedule gave regression +1.08 dB, so this step is not optional for a good result.
 
-## 8. Options that need your decision
+**Step 3. Improvements, as time allows, in this order.**
+1. Clean-input and mild-severity check (1 h, no training): a generative model must not repaint already-clean images.
+2. One tuning run on the final model: the held-back loss that matches the observed weakness (LDL if PSNR is low, focal frequency if texture is weak), and test-time noise scale.
+3. Corruption list v3 as a fine-tune of the final model (about 12–15 h).
 
-- **Initialising the long run from a19's weights** would save most of the 200k steps and likely end closer to a19's PSNR. It is common practice (SRGAN, Real-ESRGAN, SinSR start from pretrained networks) and the result would still satisfy G1–G4, but the model would then begin as a regression network. Default in this plan: **no**, train from scratch. Say if you want it.
-- **Asking the instructor** whether FLOPs are counted over all sampling steps and whether a one-step sampler is acceptable. Not required to proceed: the plan assumes the strict answer to both.
+**Step 4. Optional small sibling.** Same model at width 16 (2.3 GFLOPs), about 12 h, if a lower-FLOPs entry is wanted (§2).
 
-## 9. Not doing
+**Step 5. Submission.** Export the sampler module, uint8 output, FLOPs with fvcore and ptflops, CPU test from a clean checkout; report (architecture, training objective, degradations) with the screening table, diversity numbers and the unseen-family results.
 
-Regression models or regression-only fine-tunes; new backbones, attention, FFT, wavelet, degradation-label conditioning (≤ 0.1 dB in rounds 2–3); diffusion from pure noise as a main line; pretrained latent diffusion; models above 5 GFLOPs as the default entry or below ~2 GFLOPs.
+**If the deadline is close:** Step 0 → a21 and a22 only → Step 2 → Step 5. That is two short runs and one long run.
+
+---
+
+## 9. What I need from you
+
+- Approval of this plan, or the changes you want.
+- How many days remain and how many GPUs can run in parallel. This decides between the full screening (four runs) and the short path (two runs).

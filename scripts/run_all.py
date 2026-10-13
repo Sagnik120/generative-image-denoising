@@ -16,7 +16,10 @@ What it does:
      train -> evaluate -> export for it. Each architecture is its own
      process with its own log (results/<arch>/logs/console.log); if one
      fails, its GPU simply moves on to the next architecture.
-  4. Finishes with scripts/compare_architectures.py and a status table.
+     Round-4 generative models also run scripts/eval_generative.py after
+     evaluate (sample diversity, multi-step scores).
+  4. Finishes with scripts/compare_architectures.py, a status table and, for
+     generative models, a table of diversity / step-count results.
 
 Re-running the same command is safe: finished architectures are skipped and
 interrupted ones resume from their last checkpoint. Use --dry_run first: it
@@ -36,7 +39,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.registry import ARCHITECTURES, ROUND2, default_config_path
+from src.registry import ARCHITECTURES, ROUND2, ROUND4, default_config_path
 from src.common.utils import load_yaml
 
 print_lock = threading.Lock()
@@ -101,6 +104,11 @@ def run_arch(arch, gpu_uuid, args, status):
                            "--results_root", str(results_root)]),
              ("export", [py, "scripts/export_inference.py", "--arch", arch, *device,
                          "--results_root", str(results_root)])]
+    if arch in ROUND4:
+        # Generative models: also measure sample diversity (and, for diffusion
+        # samplers, quality at several step counts). Runs before export.
+        steps.insert(2, ("generative_eval", [py, "scripts/eval_generative.py", *common, *device,
+                                             "--results_root", str(results_root)]))
     t0 = time.time()
     with open(log_path, "a") as f:
         for name, cmd in steps:
@@ -153,6 +161,8 @@ def main():
                    help="nvidia-smi GPU indices to use (default: every idle GPU within --max_gpu_gb).")
     p.add_argument("--max_gpu_gb", type=float, default=30.0)
     p.add_argument("--allow_busy_gpu", action="store_true")
+    p.add_argument("--jobs_per_gpu", type=int, default=1,
+                   help="Architectures trained at the same time on each GPU (check memory with --dry_run).")
     p.add_argument("--dry_run", action="store_true",
                    help="30-step rehearsal of every architecture; real results are not touched.")
     p.add_argument("--force", action="store_true", help="Re-run architectures that already finished.")
@@ -196,7 +206,7 @@ def main():
     for arch in todo:
         jobs.put(arch)
     threads = []
-    for gpu in gpus:
+    for gpu in [g for g in gpus for _ in range(max(1, args.jobs_per_gpu))]:
         t = threading.Thread(target=worker, args=(gpu, jobs, args, status))
         t.start()
         threads.append(t)
@@ -208,6 +218,19 @@ def main():
     if not args.dry_run:
         subprocess.call([sys.executable, "scripts/compare_architectures.py",
                          "--results_root", args.results_root], cwd=str(PROJECT_ROOT))
+    gen_root = Path(args.results_root) / "_dry_run" if args.dry_run else Path(args.results_root)
+    gen_rows = []
+    for arch in todo:
+        path = gen_root / arch / "metrics" / "generative_eval.json"
+        if arch in ROUND4 and path.exists():
+            import json
+            for r in json.loads(path.read_text())["results"]:
+                gen_rows.append(f"  {arch:20s} steps={r['steps']}  PSNR {r['psnr']:.3f}  SSIM {r['ssim']:.4f}  "
+                                f"DISTS {r['dists']:.4f}  {r['gflops']:.2f} GFLOPs  "
+                                f"diversity {r['diversity']:.3f}/255")
+    if gen_rows:
+        print("\n" + "=" * 70 + "\nGENERATIVE EVALUATION (diversity must be clearly above 0)\n" + "=" * 70)
+        print("\n".join(gen_rows))
     print("\n" + "=" * 70 + f"\n{'DRY RUN ' if args.dry_run else ''}SUMMARY\n" + "=" * 70)
     for arch in todo:
         extra = dry_run_figures(arch, args.results_root) if args.dry_run else ""

@@ -45,6 +45,11 @@ ARCHITECTURES = {
     "a17_naf_dists0": "src.architectures.a17_naf_dists0.model",
     "a18_naf_dists0_strong": "src.architectures.a18_naf_dists0_strong.model",
     "a19_final": "src.architectures.a19_final.model",
+    # ---- round 4: strictly generative models (see docs/PLAN.md) ----
+    "a20_gan": "src.architectures.a20_gan.model",
+    "a21_gan_wavelet": "src.architectures.a21_gan_wavelet.model",
+    "a22_resdiff": "src.architectures.a22_resdiff.model",
+    "a23_resdiff_2step": "src.architectures.a23_resdiff_2step.model",
 }
 
 # Architectures are numbered in the order they were added. Round 1 (a01-a04)
@@ -53,7 +58,8 @@ ARCHITECTURES = {
 ROUND1 = ["a01_nafnet_unet", "a02_restormer_lite", "a03_pix2pix_gan", "a04_tiny_ddpm_sr3"]
 FINAL = "a19_final"              # its config.yaml is written by scripts/run_plan.py
 ROUND3 = [name for name in ARCHITECTURES if "a12" <= name[:3] <= "a18"]
-ROUND2 = [name for name in ARCHITECTURES if name not in ROUND1 + ROUND3 + [FINAL]]
+ROUND4 = [name for name in ARCHITECTURES if name[:3] >= "a20"]
+ROUND2 = [name for name in ARCHITECTURES if name not in ROUND1 + ROUND3 + ROUND4 + [FINAL]]
 
 
 def get_architecture_module(name: str):

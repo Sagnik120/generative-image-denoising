@@ -35,3 +35,14 @@ All use one network, `src/common/plannet.py::PlanNet` (a05's NAF U-Net with an o
 | 17 | [a17_naf_dists0](a17_naf_dists0.md) | DISTS loss from step 0 | 31.833 | 0.8530 | 0.1517 | 4.978 | −0.0025 DISTS for −0.09 dB; rejected |
 | 18 | [a18_naf_dists0_strong](a18_naf_dists0_strong.md) | DISTS 0.2, SSIM 0.3 from step 0 | 31.566 | 0.8476 | 0.1502 | 4.978 | −0.36 dB; rejected |
 | 19 | [a19_final](a19_final.md) | a15 config, 200k steps | **33.112** | **0.8743** | **0.1293** | 4.978 | best; regression, not compliant; reference and initialisation for the generative model |
+
+## Round 4 (a20–a23): strictly generative models
+
+The brief requires a generative model, so rounds 1–3 serve as reference only. All four train from scratch on v2 data for 60k steps with the composite loss; each has a noise input and is checked for sample diversity (`scripts/eval_generative.py`). Results pending.
+
+| # | File | Model | Sampling | GFLOPs |
+|---|---|---|---|---|
+| 20 | [a20_gan](a20_gan.md) | conditional GAN, RGB discriminator | 1 pass | 4.98 |
+| 21 | [a21_gan_wavelet](a21_gan_wavelet.md) | conditional GAN, wavelet discriminator + wavelet loss | 1 pass | 4.98 |
+| 22 | [a22_resdiff](a22_resdiff.md) | residual diffusion, width 24 | 1 step (also scored at 2, 4) | 5.02 |
+| 23 | [a23_resdiff_2step](a23_resdiff_2step.md) | residual diffusion, width 16 | 2 steps | 4.61 |
