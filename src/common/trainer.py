@@ -67,7 +67,8 @@ class Trainer:
 
         self.csv_path = self.dirs["logs"] / "training_log.csv"
         self.fieldnames = ["epoch", "train_loss", "val_loss", "val_psnr", "val_ssim",
-                           "val_dists", "gen_loss", "disc_loss", "lr", "epoch_time_sec"]
+                           "val_dists", "gen_loss", "disc_loss", "train_spread255", "lr",
+                           "epoch_time_sec"]
 
         self.start_epoch = 1
         self.best_score = -float("inf")
@@ -122,6 +123,7 @@ class Trainer:
                 "val_dists": val_metrics.get("dists", float("nan")),
                 "gen_loss": train_metrics.get("gen_loss", ""),
                 "disc_loss": train_metrics.get("disc_loss", ""),
+                "train_spread255": train_metrics.get("spread255", ""),   # round 5: sample spread
                 "lr": self.bundle.get_lr() if hasattr(self.bundle, "get_lr") else "",
                 "epoch_time_sec": round(elapsed, 2),
             }
@@ -195,6 +197,8 @@ class Trainer:
         if has_gan:
             out["gen_loss"] = meters["gen_loss"].avg
             out["disc_loss"] = meters["disc_loss"].avg
+        if "spread255" in meters:
+            out["spread255"] = meters["spread255"].avg
         return out
 
     @torch.no_grad()

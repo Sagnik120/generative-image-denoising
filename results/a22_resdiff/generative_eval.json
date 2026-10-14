@@ -1,0 +1,32 @@
+{
+  "architecture": "a22_resdiff",
+  "checkpoint": "/DATA1/shrusti/genai_project/results/a22_resdiff/checkpoints/best_model.pt",
+  "seeds": 8,
+  "results": [
+    {
+      "steps": 1,
+      "psnr": 31.511417896066103,
+      "ssim": 0.8498854245710918,
+      "dists": 0.1654250958953241,
+      "diversity": 0.49757227798302966,
+      "gflops": 5.020125184
+    },
+    {
+      "steps": 2,
+      "psnr": 31.215800241348294,
+      "ssim": 0.8422929951374468,
+      "dists": 0.16922093235483074,
+      "diversity": 1.6093892057736714,
+      "gflops": 10.040250368
+    },
+    {
+      "steps": 4,
+      "psnr": 30.6778438820263,
+      "ssim": 0.8276524575687898,
+      "dists": 0.1709180192814933,
+      "diversity": 2.4015384912490845,
+      "gflops": 20.080500736
+    }
+  ],
+  "mean_noise_strength": null
+}

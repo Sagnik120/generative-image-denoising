@@ -1,38 +1,44 @@
-# Walkthrough: round 4 (generative models)
+# Walkthrough: round 5 (stochastic recipe, a24–a26)
 
-Written 2026-10-14. What was just added, how to get it onto the GPU machine, and the one command that runs everything. Plan and reasoning: `PLAN.md`. Model details: `architectures/a20_gan.md` to `a23_resdiff_2step.md`.
+Written 2026-10-14. What was just added, how to get it onto the GPU machine (two 24 GB GPUs), and the commands that run everything. Plan and reasoning: `PLAN.md`. Model details: `architectures/a24_gan_div.md`, `a25_gan_div_wave.md`, `a26_resdiff_gan.md`. Round-4 results: `COMPARISON.md` §9.
 
 ## 1. What was completed
 
-Four strictly generative models, ready to train. All use the existing data, degradation pipeline v2, benchmarks and composite loss, and train from scratch for 60k steps.
+Three strictly generative models, ready to train. Same data (pipeline v2), benchmarks, backbone and 60k-step schedule as round 4, all from scratch.
 
-- **a20_gan**: conditional GAN. NAF U-Net generator with noise injection, U-Net discriminator on RGB. 4.98 GFLOPs.
-- **a21_gan_wavelet**: same GAN, but the discriminator sees high-frequency wavelet bands, plus a wavelet fidelity loss. 4.98 GFLOPs.
-- **a22_resdiff**: residual diffusion (starts from the corrupted image + noise), 1 sampling step. 5.02 GFLOPs.
-- **a23_resdiff_2step**: residual diffusion at width 16, 2 sampling steps. 4.61 GFLOPs.
+- **a24_gan_div**: a20's conditional GAN + the stochastic recipe. 4.98 GFLOPs.
+- **a25_gan_div_wave**: a24 with the wavelet-domain discriminator and wavelet L1 (frequency variant). 4.98 GFLOPs.
+- **a26_resdiff_gan**: one-step residual diffusion + GAN. 5.02 GFLOPs.
+
+The stochastic recipe (all three; training-only, no inference FLOPs):
+- 8 images per step, each restored with **2 noise draws** (16 generator outputs, same compute as round 4).
+- Composite loss on the **mean** of the two samples; 0.2 × Charbonnier on each sample.
+- **Diversity hinge**: pushes the two samples ~2 grey levels apart, then stops.
+- Adversarial weight 0.01 (round 4: 0.005); noise strength starts at 0.01 (round 4: 0).
 
 Files added or changed:
+- `src/common/gan.py`: two-sample training, mean-of-samples loss, per-sample Charbonnier, diversity hinge (`train.stochastic` in the config; off when absent, so a20/a21 are unchanged). New `generate()` hook for subclasses.
+- `src/common/gennet.py`: `noise_init` (starting noise strength), test-time `scale`, `set_noise_scale()`.
+- `src/common/resdiff.py`: `ResDiffGANBundle` (diffusion + GAN), level shared by the two draws of an image, test-time `noise_scale`.
+- `src/common/trainer.py`: new `train_spread255` column in `training_log.csv` (mean difference between the two samples, grey levels). The early warning for collapse.
+- `scripts/eval_generative.py`: noise-scale sweep (×0.5, ×1, ×1.5; `--noise_scales`).
+- `scripts/run_all.py`: prints the noise scale in its generative table.
+- `src/architectures/a24_gan_div/`, `a25_gan_div_wave/`, `a26_resdiff_gan/`: `config.yaml` + `model.py`; `src/registry.py`: three entries.
+- Docs: `PLAN.md` (two-GPU schedule), `CURRENT_STATUS.md`, `COMPARISON.md` §9, `architectures/` (a20–a23 results, a24–a26 new, README).
 
-- `src/common/gennet.py`: generator and seeded noise injection.
-- `src/common/gan.py`: discriminator, hinge + R1 losses, wavelet loss, GAN training step.
-- `src/common/resdiff.py`: diffusion network, training, few-step sampler.
-- `src/architectures/a20_gan/`, `a21_gan_wavelet/`, `a22_resdiff/`, `a23_resdiff_2step/`: a `config.yaml` and a short `model.py` each.
-- `scripts/eval_generative.py` (new): sample diversity over 8 noise seeds; for diffusion, scores at 1, 2 and 4 steps.
-- `scripts/run_all.py`: now runs `eval_generative.py` automatically for these models and prints its table at the end. Also has `--jobs_per_gpu` (default 1; leave it).
-- `src/registry.py`: the four new entries.
-
-Tested so far: on CPU only (a few training steps per model, checkpoint save/load, export-style rebuild, reproducible output, FLOPs). **Not yet tested on a GPU**: mixed precision, the data pipeline and the export step. The dry run in step 3 covers these, so do not skip it.
+Tested on CPU: 3 training steps per model with all losses (DISTS off, its weights were not available offline), checkpoint save/load, output shape, same seed → identical output, different seed → different output, noise scale 0 → seed-independent output, FLOPs with fvcore (a24 4.978, a26 5.020 GFLOPs). **Not tested on a GPU**: mixed precision, DISTS, memory, speed. The dry run covers these.
 
 ## 2. Commit and push (on this machine)
 
-Only code and docs are added here. The `results/` folder has other uncommitted files (round-3 outputs); they are left out on purpose, add them separately if you want them in the repo.
-
 ```
 git add src scripts docs
+git add results/a20_gan results/a21_gan_wavelet results/a22_resdiff results/a23_resdiff_2step results/comparison_round1 results/comparison_round23 results/comparison_round4
 git status
-git commit -m "feat: add round 4 generative models a20-a23 (GAN, wavelet GAN, residual diffusion)"
+git commit -m "feat: add round 5 generative models a24-a26 (stochastic recipe, diffusion+GAN) and round 4 analysis"
 git push origin main
 ```
+
+`git status` also shows deleted files under `results/comparison/` and `results/comparison_old/`. They are left out of the commit; add them with `git add -A results/comparison results/comparison_old` only if the deletion is intended.
 
 ## 3. Run on the GPU machine
 
@@ -41,72 +47,71 @@ cd <repo on the GPU machine>
 git pull origin main
 ```
 
-**Dry run first** (about 10–15 minutes; 30 training steps per model, then the real evaluate, generative-eval and export steps; prints speed and peak memory per model):
+**Dry run first** (about 15 minutes; 30 training steps per model, then the real evaluate, generative-eval and export steps; prints speed and peak memory):
 
 ```
-python scripts/run_all.py --data_root <DATA> --archs a21_gan_wavelet a22_resdiff a20_gan a23_resdiff_2step --dry_run
+python scripts/run_all.py --data_root <DATA> --archs a24_gan_div a26_resdiff_gan a25_gan_div_wave --dry_run
 ```
 
-Check that all four say `OK`. If one says `FAILED`, send me `results/_dry_run/<model>/logs/console.log`.
+All three must say `OK`. If one fails, send me `results/_dry_run/<model>/logs/console.log`.
 
-**Real run, one command:**
-
-```
-nohup python scripts/run_all.py --data_root <DATA> --archs a21_gan_wavelet a22_resdiff a20_gan a23_resdiff_2step > run_round4.log 2>&1 &
-```
-
-This uses both GPUs, one model per GPU. For each model it runs: train → evaluate (benchmarks v1 and v2) → generative evaluation (diversity, step counts) → export. When a GPU finishes a model it takes the next one. At the end it prints the comparison table and the generative-evaluation table into `run_round4.log`. Nothing else needs to be run by hand.
-
-Useful while it runs:
+**Real run, one command** (both GPUs, one model per GPU, queue order matters):
 
 ```
-tail -f run_round4.log                              # start/end of each model
-tail -f results/a21_gan_wavelet/logs/console.log    # progress of one model
+nohup python scripts/run_all.py --data_root <DATA> --archs a24_gan_div a26_resdiff_gan a25_gan_div_wave > run_round5.log 2>&1 &
 ```
 
-If it is interrupted, run the same `nohup` command again: finished models are skipped and unfinished ones resume from their last checkpoint.
+GPU 0 takes a24, GPU 1 takes a26; whichever GPU frees first takes a25 (in practice GPU 1). For each model: train → evaluate (v1, v2) → generative eval (diversity, noise scales ×0.5/×1/×1.5, and 1/2/4 steps for a26) → export. If interrupted, run the same command again: finished models are skipped, unfinished ones resume.
 
-## 4. What it will cost
+While it runs:
 
-One model per GPU. Only the 10.5 GB figure is measured (the regression model of the same size, in an earlier dry run); the rest are estimates that the dry run will replace with real numbers.
+```
+tail -f run_round5.log
+tail -f results/a24_gan_div/logs/console.log          # look at spread255 in the step lines
+column -s, -t < results/a24_gan_div/logs/training_log.csv | tail -5
+nvidia-smi
+```
 
-GPU memory (peak, of 24 GB)
-- a20, a21 (GAN): about 13–15 GB
-- a22 (diffusion, width 24): about 11–13 GB
-- a23 (diffusion, width 16): about 8–9 GB
+**Collapse check after epoch 2–3 (~1 h):** `spread255` / `train_spread255` should be around 1.5–2.5. If it is below 0.3 and falling, the noise is being switched off again: tell me, and I will raise the diversity weight before you lose a night.
 
-Time
-- a20, a21: about 6.5–7.5 h each
-- a22: about 5 h
-- a23: about 4 h
-- Evaluation and export add about 10–15 minutes per model.
-- **Whole queue on two GPUs: about 12 h.** GPU 0: a21 then a20 or a23; GPU 1: a22 then the other.
+## 4. Time and memory (two 24 GB GPUs)
 
-Disk
-- About 0.3 GB per model (two checkpoints, submission package, images, logs): about 1.2 GB for all four. No new data is downloaded.
+Times from round 4's measured epoch times (a20 1300 s, a21 1010 s, a22 870 s per 2,500 steps); the new runs do the same generator work per step. Memory is estimated; the dry run gives the measured peak.
+
+| Model | Peak GPU memory (of 24 GB) | 60k steps | Eval + export |
+|---|---|---|---|
+| a24_gan_div | ~13–16 GB | ~8–9 h | ~25 min (noise sweep) |
+| a25_gan_div_wave | ~12–15 GB | ~7 h | ~25 min |
+| a26_resdiff_gan | ~14–17 GB | ~7–8 h | ~40 min (steps + noise sweep) |
+
+- **Queue:** GPU 0 a24 (~9 h); GPU 1 a26 (~8 h) then a25 (~7 h). **a24 and a26 done ~9 h after start; a25 ~16 h.**
+- **Disk:** ~0.3 GB per model, ~1 GB total.
+- **Long run (Day 2 onward):** 200k steps ≈ 29 h for a GAN, ≈ 25 h for a26, one GPU.
+
+If memory is above ~22 GB in the dry run, add `--train_args "--batch_size 6"` (6 images × 2 draws) and tell me.
 
 ## 5. What to send back
 
-`run_round4.log` is enough for a first look (it contains both tables). For the full analysis, per model:
+`run_round5.log` for a first look (comparison and generative tables). For the full analysis, per model:
 
 - `results/<model>/metrics/final_evaluation_summary.json`
 - `results/<model>/metrics/generative_eval.json`
 - `results/<model>/metrics/final_report.json`
 - `results/<model>/logs/training_log.csv`
 - `results/<model>/visualizations/epoch_0024_comparison.png`
-- `results/comparison/` (the four CSV files)
+- `results/comparison/` (CSV files)
 
-The number to look at first is **diversity** in the generative table. If it is near zero for a model, that model ignores its noise and is not eligible (plan section 7).
+First numbers to look at: **diversity** (≥ 0.5 to be eligible, 1–2 expected) and PSNR against a20 (31.89).
 
-## 6. Schedule for the remaining 5 days
+## 6. Schedule
 
-One day is kept free for the report and final checks, so four days of work.
+| Day | What |
+|---|---|
+| 1 | commit, pull, dry run, start round 5 (overnight) |
+| 2 | morning: send a24/a26 results; I pick the winner and add its 200k config (small code step); **start the long run on GPU 0 by midday**. GPU 1 finishes a25 |
+| 3 | long run continues; GPU 1: width-16 sibling or a tuning run (adversarial 0.02) if diversity is low |
+| 4 | long run done; evaluation, noise-scale choice; optional v3 corruption fine-tune overnight |
+| 5 | final choice, export with the sampler inside the model call, FLOPs (fvcore + ptflops), CPU inference test |
+| 6 | report |
 
-- **Day 1:** commit, pull, dry run, start the screening run (about 12 h, can run overnight).
-- **Day 2 morning:** I analyse the results, pick the winner by the rules in the plan, and prepare the final model's config (the same model, 200k steps). This needs one small code step from me (a new config; a diffusion + GAN model only if both families show problems).
-- **Day 2 to Day 3:** final long run. About 17–25 h depending on the winner (a GAN is the slow case). The second GPU is free during this time and can run one tuning variant of the winner at 60k steps (for example a different adversarial weight or noise scale).
-- **Day 4:** evaluate the final model, clean-input check, export, FLOPs with both counters, CPU inference test. If time allows, one short fine-tune with a wider corruption list.
-- **Day 5:** buffer for anything that failed, then freeze the submission.
-- **Day 6:** report and final packaging.
-
-There is no room in this schedule for a second full screening round, so if the dry run shows a problem it is worth fixing it the same day.
+Fallback if no round-5 model is eligible: a22 (already trained) with the noise scale that keeps diversity ≥ 0.5.

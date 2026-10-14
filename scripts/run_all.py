@@ -225,7 +225,7 @@ def main():
         if arch in ROUND4 and path.exists():
             import json
             for r in json.loads(path.read_text())["results"]:
-                gen_rows.append(f"  {arch:20s} steps={r['steps']}  PSNR {r['psnr']:.3f}  SSIM {r['ssim']:.4f}  "
+                gen_rows.append(f"  {arch:20s} steps={r['steps']} noise x{r.get('noise_scale', 1.0):g}  PSNR {r['psnr']:.3f}  SSIM {r['ssim']:.4f}  "
                                 f"DISTS {r['dists']:.4f}  {r['gflops']:.2f} GFLOPs  "
                                 f"diversity {r['diversity']:.3f}/255")
     if gen_rows:

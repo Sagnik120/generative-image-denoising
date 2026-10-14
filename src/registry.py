@@ -50,6 +50,10 @@ ARCHITECTURES = {
     "a21_gan_wavelet": "src.architectures.a21_gan_wavelet.model",
     "a22_resdiff": "src.architectures.a22_resdiff.model",
     "a23_resdiff_2step": "src.architectures.a23_resdiff_2step.model",
+    # ---- round 5: stochastic recipe (two samples, diversity term) ----
+    "a24_gan_div": "src.architectures.a24_gan_div.model",
+    "a25_gan_div_wave": "src.architectures.a25_gan_div_wave.model",
+    "a26_resdiff_gan": "src.architectures.a26_resdiff_gan.model",
 }
 
 # Architectures are numbered in the order they were added. Round 1 (a01-a04)
@@ -58,7 +62,7 @@ ARCHITECTURES = {
 ROUND1 = ["a01_nafnet_unet", "a02_restormer_lite", "a03_pix2pix_gan", "a04_tiny_ddpm_sr3"]
 FINAL = "a19_final"              # its config.yaml is written by scripts/run_plan.py
 ROUND3 = [name for name in ARCHITECTURES if "a12" <= name[:3] <= "a18"]
-ROUND4 = [name for name in ARCHITECTURES if name[:3] >= "a20"]
+ROUND4 = [name for name in ARCHITECTURES if name[:3] >= "a20"]   # all generative (rounds 4-5)
 ROUND2 = [name for name in ARCHITECTURES if name not in ROUND1 + ROUND3 + ROUND4 + [FINAL]]
 
 

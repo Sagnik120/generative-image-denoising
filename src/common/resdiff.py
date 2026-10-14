@@ -28,7 +28,7 @@ import torch
 import torch.nn as nn
 
 from .bundle import RestorationBundle
-from .gan import wavelet_l1
+from .gan import GANBundle, wavelet_l1
 from .layers import NAFBlock, sinusoidal_time_embedding
 from .unet import RestorationUNet
 
@@ -62,6 +62,7 @@ class ResDiffSampler(nn.Module):
         super().__init__()
         self.net = net
         self.timesteps, self.steps, self.kappa = timesteps, steps, kappa
+        self.noise_scale = 1.0       # test-time noise-scale sweep only
         self.eta = [(i / timesteps) ** eta_power for i in range(timesteps + 1)]
         self.register_buffer("eval_noise", torch.zeros(timesteps, 3, image_size, image_size))
         self.reseed(0)
@@ -82,7 +83,7 @@ class ResDiffSampler(nn.Module):
     def _noise(self, like, i):
         if self.training or self.eval_noise.shape[-2:] != like.shape[-2:]:
             return torch.randn_like(like)
-        return self.eval_noise[i:i + 1].to(like.dtype)
+        return self.noise_scale * self.eval_noise[i:i + 1].to(like.dtype)
 
     def forward(self, corrupted):
         levels = self.levels()
@@ -105,16 +106,19 @@ class ResDiffBundle(RestorationBundle):
         self.self_pred_prob = t.get("self_pred_prob", 0.5)
         self.last_level_prob = t.get("last_level_prob", 0.5)
         self.wavelet_weight = t.get("wavelet_weight", 0.0)
+        self.samples = 1
 
     def forward_train(self, corrupted, clean, labels):
         sampler = self.model
         net, T, kappa = sampler.net, sampler.timesteps, sampler.kappa
         b, dev = clean.shape[0], clean.device
-        # Half the samples sit at the last level (where sampling always starts);
-        # the rest are spread over all levels.
-        level = torch.where(torch.rand(b, device=dev) < self.last_level_prob,
-                            torch.full((b,), T, device=dev),
-                            torch.randint(1, T + 1, (b,), device=dev))
+        # A share of the samples sits at the last level (where sampling always
+        # starts); the rest are spread over all levels. With several noise draws
+        # per image (round 5) all copies of one image share a level.
+        n = b // self.samples
+        level = torch.where(torch.rand(n, device=dev) < self.last_level_prob,
+                            torch.full((n,), T, device=dev),
+                            torch.randint(1, T + 1, (n,), device=dev)).repeat(self.samples)
         source = clean
         # Multi-step samplers: half the batches build x_t from the network's own
         # first estimate, which is what later steps actually receive.
@@ -132,6 +136,27 @@ class ResDiffBundle(RestorationBundle):
             wave = wavelet_l1(pred, clean)
             extra, logs = self.wavelet_weight * wave, {"wave": wave.item()}
         return pred, extra, logs
+
+
+class ResDiffGANBundle(GANBundle):
+    """Round 5 (a26): one-step residual diffusion + GAN (Denoising Diffusion
+    GANs, Xiao et al. 2022). The generator pass is the residual-diffusion
+    training pass (random level, clean-image estimate); GANBundle adds the
+    discriminator, the adversarial term and the two-sample recipe."""
+
+    def __init__(self, cfg, device, model, name="resdiff_gan"):
+        super().__init__(cfg, device, model, name=name)
+        t = cfg["train"]
+        self.self_pred_prob = t.get("self_pred_prob", 0.5)
+        self.last_level_prob = t.get("last_level_prob", 0.5)
+
+    def generate(self, corrupted, clean):
+        wavelet, self.wavelet_weight = self.wavelet_weight, 0.0   # GANBundle applies it
+        try:
+            pred, _, _ = ResDiffBundle.forward_train(self, corrupted, clean, None)
+        finally:
+            self.wavelet_weight = wavelet
+        return pred
 
 
 def build_sampler(model_cfg):

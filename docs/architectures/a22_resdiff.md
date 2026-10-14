@@ -14,4 +14,25 @@ Round 4: strictly generative models. Plan: `../PLAN.md`.
 **Data and schedule:** degradation pipeline v2 (22 families), three domains, batch 16, AdamW 4e-4 cosine, EMA 0.999, mixed precision, 60k steps, trained from scratch (no a19 weights).
 
 ## Results
-Pending. After the run, fill in from `results/a22_resdiff/metrics/final_evaluation_summary.json` (PSNR / SSIM / DISTS / GFLOPs, groups, domains, benchmark v2) and `generative_eval.json` (diversity per step count). Reference: a15 (regression, same data and steps) 32.03 dB / 0.8594 / 0.1537; `unseen_v2` 30.99 dB.
+Benchmark v1, 60k steps, single seed. The same checkpoint sampled with 1, 2 and 4 steps (`generative_eval.json`, 8 seeds).
+
+| Steps | PSNR | SSIM | DISTS | GFLOPs | Diversity |
+|---|---|---|---|---|---|
+| **1 (submittable)** | 31.511 | 0.8499 | 0.1654 | 5.02 | **0.498** |
+| 2 | 31.216 | 0.8423 | 0.1692 | 10.04 | 1.61 |
+| 4 | 30.678 | 0.8277 | 0.1709 | 20.08 | 2.40 |
+| a15 (regression ref.) | 32.034 | 0.8594 | 0.1537 | 4.98 | 0 |
+
+| Group (1 step) | single | extra | pair | triple | unseen | natural | lowlight | medical | unseen_v2 | plan (v2) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| PSNR | 34.21 | 33.60 | 30.10 | 29.10 | 31.11 | 28.08 | 36.52 | 33.36 | 29.72 | 36.39 |
+| vs a15 | −0.68 | −0.92 | −0.43 | −0.26 | −0.50 | −0.49 | −0.42 | −0.69 | −1.27 | +0.19 |
+
+## Analysis
+- **Borderline generative at 1 step:** diversity 0.498 grey levels, just at the 0.5 threshold. The sampler starts from `y + 0.1·noise` (noise of ~25 grey levels) and removes almost all of it; what is left is a faint residue of the starting noise, not a meaningful choice between plausible images.
+- **Quality cost is real: −0.52 dB, −0.010 SSIM, +0.012 DISTS vs a15**, and −1.27 dB on `unseen_v2`. Four times the PSNR cost of a20.
+- **Where it loses:** the structured cases that need exact detail: `small_artifacts` −2.33, `salt_pepper` −1.30, `periodic_noise` −1.25, `chromatic_aberration` −1.09, `motion_blur` −1.04. On random-noise cases it is close to a15 (−0.2 to −0.3). Two reasons: (1) the network must also remove its own sampling noise from `x_T`, which hides fine structure it needs to see; (2) half of training is spent on levels 1–3, which a 1-step sampler never uses, so the 1-step path received about half the effective training of a15.
+- **More steps make it worse, not better** (−0.30 dB at 2 steps, −0.83 at 4, DISTS also worse). In theory more steps trade PSNR for realism, but here DISTS does not improve either. The model was trained with `steps = 1`, so self-prediction training was off: later steps see intermediate images unlike anything in training. And with a pure reconstruction loss each step returns an average estimate, so re-noising and re-estimating only adds error. Nothing in the objective rewards sharper or more realistic samples.
+- **What it teaches:** residual diffusion gives diversity by construction, but with reconstruction loss only it pays PSNR for noise it then throws away. To be worth its cost it needs a term that rewards realistic samples (adversarial: diffusion + GAN, a26) and training focused on the level actually sampled.
+
+**Verdict: only marginally generative, −0.52 dB vs regression, multi-step useless as trained. Not the winner as is; base for the diffusion + GAN model a26, and the safety-net candidate because its training objective is a genuine diffusion objective.**

@@ -12,4 +12,25 @@ Round 4: strictly generative models. Plan: `../PLAN.md`.
 **Data and schedule:** degradation pipeline v2 (22 families), three domains, batch 16, AdamW 4e-4 cosine, EMA 0.999, mixed precision, 60k steps, trained from scratch (no a19 weights).
 
 ## Results
-Pending. After the run, fill in from `results/a21_gan_wavelet/metrics/final_evaluation_summary.json` (PSNR / SSIM / DISTS / GFLOPs, groups, domains, benchmark v2) and `generative_eval.json` (diversity and mean noise strength). Reference: a15 (regression, same data and steps) 32.03 dB / 0.8594 / 0.1537; `unseen_v2` 30.99 dB.
+Benchmark v1, 60k steps, single seed. Diversity over 8 seeds in grey levels of 255.
+
+| | PSNR | SSIM | DISTS | GFLOPs | Diversity | unseen_v2 PSNR |
+|---|---|---|---|---|---|---|
+| a21 | 31.809 | 0.8551 | 0.1544 | 4.98 | **0.064** | 30.71 |
+| a20 (RGB discriminator) | 31.886 | 0.8554 | 0.1534 | 4.98 | 0.066 | 30.48 |
+| a15 (regression ref.) | 32.034 | 0.8594 | 0.1537 | 4.98 | 0 | 30.99 |
+
+| Group | single | extra | pair | triple | unseen | natural | lowlight | medical | plan (v2) |
+|---|---|---|---|---|---|---|---|---|---|
+| PSNR | 34.50 | 34.78 | 30.30 | 29.17 | 31.37 | 28.30 | 36.71 | 33.93 | 35.86 |
+| vs a20 | −0.11 | +0.08 | −0.08 | −0.05 | −0.16 | −0.16 | −0.04 | +0.04 | −0.12 |
+
+Mean learned noise strength 0.0015. Generator adversarial loss drifted to ≈ −0.03 and discriminator loss rose to ≈ 1.63 by the end.
+
+## Analysis
+- **Same failure as a20: noise ignored** (diversity 0.06). Not eligible.
+- **The wavelet idea was worth nothing measurable on v1:** −0.08 dB, −0.0004 SSIM, +0.001 DISTS vs a20, all at or near single-seed noise (~0.05 dB). Per case it helps `resize_blur` (+0.65 vs a20) and `jpeg` (+0.31) and hurts the noise cases (`salt_pepper` −0.31, `speckle_noise` −0.26) and `periodic_noise` (−0.33).
+- **One positive sign:** `unseen_v2` +0.24 dB over a20 (30.71 vs 30.48), mostly the families it never saw. A discriminator that looks only at detail bands may push the generator toward cleaner high frequencies in general. Single seed, 96 images: a hint, not a result.
+- **Why the test was weak:** at adversarial weight 0.005 with variance already collapsed, the discriminator barely shapes the generator in either variant; the a21 − a20 gap is mostly the extra wavelet L1 term. The discriminator losses agree: in a21 the discriminator wins (generator loss < 0), i.e. the wavelet discriminator is easy to satisfy and gives weak signal. The wavelet discriminator can only be judged properly in a GAN whose adversarial term actually matters.
+
+**Verdict: no gain at this adversarial strength; not eligible. Kept as a frequency variant (a25) only in combination with the diversity fix, where the discriminator has real influence.**

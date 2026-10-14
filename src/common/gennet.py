@@ -7,8 +7,10 @@ are shared here:
 
   NoiseInjection - adds per-pixel Gaussian noise to a feature map with a
                    learned per-channel strength (StyleGAN, Karras et al. 2019).
-                   The strength starts at zero, so training starts stable and
-                   the network learns how much randomness to use.
+                   The strength starts at zero (round 4) or at a small value
+                   (round 5, `noise_init`), and the network learns how much
+                   randomness to use. `scale` multiplies the noise at test
+                   time only (noise-scale sweep; not saved with the weights).
   GenNet         - the a05/a15 NAF U-Net with a NoiseInjection after every
                    block; the generator of the GAN models.
 
@@ -26,9 +28,10 @@ from .unet import RestorationUNet
 
 
 class NoiseInjection(nn.Module):
-    def __init__(self, channels, res, index=0):
+    def __init__(self, channels, res, index=0, init=0.0):
         super().__init__()
-        self.weight = nn.Parameter(torch.zeros(1, channels, 1, 1))
+        self.weight = nn.Parameter(torch.full((1, channels, 1, 1), float(init)))
+        self.scale = 1.0
         self.index = index
         self.register_buffer("eval_noise", torch.zeros(1, 1, res, res))
         self.reseed(0)
@@ -44,7 +47,16 @@ class NoiseInjection(nn.Module):
             noise = torch.randn(b, 1, h, w, device=x.device, dtype=x.dtype)
         else:
             noise = self.eval_noise.to(x.dtype)
-        return x + self.weight * noise
+        return x + (self.weight * self.scale) * noise
+
+
+def set_noise_scale(model, scale):
+    """Multiplies every noise source in `model` by `scale` (evaluation only)."""
+    for m in model.modules():
+        if hasattr(m, "scale") and hasattr(m, "reseed"):
+            m.scale = float(scale)
+        if hasattr(m, "noise_scale"):
+            m.noise_scale = float(scale)
 
 
 def reseed_noise(model, seed):
@@ -60,7 +72,7 @@ class GenNet(nn.Module):
     """NAF U-Net generator: corrupted image + injected noise -> restored image."""
 
     def __init__(self, width=24, enc_blocks=(2, 2, 2, 4), middle_blocks=3,
-                 dec_blocks=(1, 1, 1, 2), noise=True, image_size=256):
+                 dec_blocks=(1, 1, 1, 2), noise=True, image_size=256, noise_init=0.0):
         super().__init__()
         widths = [width * 2 ** i for i in range(len(enc_blocks) + 1)]
         counter = [0]
@@ -69,7 +81,7 @@ class GenNet(nn.Module):
             if not noise:
                 return NAFBlock(ch)
             counter[0] += 1
-            return nn.Sequential(NAFBlock(ch), NoiseInjection(ch, image_size >> level, counter[0]))
+            return nn.Sequential(NAFBlock(ch), NoiseInjection(ch, image_size >> level, counter[0], noise_init))
 
         self.net = RestorationUNet(block, in_ch=3, out_ch=3, widths=widths,
                                    enc_blocks=enc_blocks, middle_blocks=middle_blocks,
@@ -85,4 +97,5 @@ def build_generator(model_cfg):
                   enc_blocks=tuple(m.get("enc_blocks", [2, 2, 2, 4])),
                   middle_blocks=m.get("middle_blocks", 3),
                   dec_blocks=tuple(m.get("dec_blocks", [1, 1, 1, 2])),
-                  noise=m.get("noise", True))
+                  noise=m.get("noise", True),
+                  noise_init=m.get("noise_init", 0.0))

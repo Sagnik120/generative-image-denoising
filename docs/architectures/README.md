@@ -38,11 +38,23 @@ All use one network, `src/common/plannet.py::PlanNet` (a05's NAF U-Net with an o
 
 ## Round 4 (a20–a23): strictly generative models
 
-The brief requires a generative model, so rounds 1–3 serve as reference only. All four train from scratch on v2 data for 60k steps with the composite loss; each has a noise input and is checked for sample diversity (`scripts/eval_generative.py`). Results pending.
+The brief requires a generative model, so rounds 1–3 serve as reference only. All four trained from scratch on v2 data for 60k steps with the composite loss; each has a noise input and was checked for sample diversity (`scripts/eval_generative.py`, 8 seeds, mean per-pixel std in grey levels; eligibility ≥ 0.5). Reference a15 (regression, same data and steps): 32.034 / 0.8594 / 0.1537.
 
-| # | File | Model | Sampling | GFLOPs |
+| # | File | Model | Sampling | PSNR | SSIM | DISTS | GFLOPs | Diversity | Verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 20 | [a20_gan](a20_gan.md) | conditional GAN, RGB discriminator | 1 pass | **31.886** | **0.8554** | **0.1534** | 4.98 | 0.07 | best quality, noise ignored; not eligible |
+| 21 | [a21_gan_wavelet](a21_gan_wavelet.md) | conditional GAN, wavelet discriminator + wavelet loss | 1 pass | 31.809 | 0.8551 | 0.1544 | 4.98 | 0.06 | wavelet no gain on v1 (+0.24 dB `unseen_v2`); not eligible |
+| 22 | [a22_resdiff](a22_resdiff.md) | residual diffusion, width 24 | 1 step | 31.511 | 0.8499 | 0.1654 | 5.02 | 0.50 | borderline generative, −0.52 dB vs a15; 2/4 steps worse |
+| 23 | [a23_resdiff_2step](a23_resdiff_2step.md) | residual diffusion, width 16 | 2 steps | 29.930 | 0.8115 | 0.2119 | 4.61 | 1.26 | generative but −2.1 dB; rejected |
+
+Round-4 conclusion: the composite loss penalises output variance, so a GAN switches its noise off and a 1-step diffusion model removes it at a PSNR cost. Next round (a24–a27, `../PLAN.md`): loss on the mean of two samples + a diversity term + stronger adversarial signal, for both the GAN and a one-step diffusion + GAN model.
+
+## Round 5 (a24–a26): stochastic recipe
+
+Same backbone, data v2, 60k steps, from scratch. Batch = 8 images × 2 noise draws. Generator loss: composite on the mean of the two samples + 0.2 Charbonnier per sample + diversity hinge (2 grey levels) + hinge adversarial 0.01. Evaluated also with test-time noise ×0.5 / ×1 / ×1.5. Results pending.
+
+| # | File | Model | Frequency | GFLOPs |
 |---|---|---|---|---|
-| 20 | [a20_gan](a20_gan.md) | conditional GAN, RGB discriminator | 1 pass | 4.98 |
-| 21 | [a21_gan_wavelet](a21_gan_wavelet.md) | conditional GAN, wavelet discriminator + wavelet loss | 1 pass | 4.98 |
-| 22 | [a22_resdiff](a22_resdiff.md) | residual diffusion, width 24 | 1 step (also scored at 2, 4) | 5.02 |
-| 23 | [a23_resdiff_2step](a23_resdiff_2step.md) | residual diffusion, width 16 | 2 steps | 4.61 |
+| 24 | [a24_gan_div](a24_gan_div.md) | a20 GAN + stochastic recipe | FFT loss, RGB discriminator | 4.98 |
+| 25 | [a25_gan_div_wave](a25_gan_div_wave.md) | a24 + wavelet discriminator + wavelet L1 | wavelet adversarial + fidelity | 4.98 |
+| 26 | [a26_resdiff_gan](a26_resdiff_gan.md) | one-step residual diffusion + GAN | FFT loss, RGB discriminator | 5.02 |

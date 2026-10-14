@@ -1,0 +1,81 @@
+{
+  "architecture": "a23_resdiff_2step",
+  "best_composite_score": 2.347810773095393,
+  "flops_per_forward_call": 4612841472.0,
+  "gflops_per_forward_call": 4.612841472,
+  "inference_forward_passes": 1,
+  "true_total_gflops_at_inference": 4.612841472,
+  "params": 2584675,
+  "config": {
+    "architecture": "a23_resdiff_2step",
+    "model": {
+      "width": 16,
+      "enc_blocks": [
+        2,
+        2,
+        2,
+        4
+      ],
+      "middle_blocks": 3,
+      "dec_blocks": [
+        1,
+        1,
+        1,
+        2
+      ],
+      "time_dim": 64,
+      "diffusion_levels": 4,
+      "steps": 2,
+      "kappa": 0.1,
+      "eta_power": 2.0
+    },
+    "data": {
+      "patch_size": 256,
+      "batch_size": 16,
+      "val_batch_size": 16,
+      "num_workers": 8,
+      "steps_per_epoch": 2500,
+      "degradation": {
+        "families": "v2",
+        "num_ops_probs": [
+          0.08,
+          0.34,
+          0.36,
+          0.17,
+          0.05
+        ],
+        "shuffle_prob": 0.5,
+        "severity_beta": [
+          1.0,
+          1.8
+        ],
+        "listed_weight": 0.65
+      }
+    },
+    "train": {
+      "epochs": 24,
+      "lr": 0.0004,
+      "lr_min": 1e-06,
+      "warmup_steps": 1000,
+      "weight_decay": 0.0001,
+      "amp": true,
+      "ema_decay": 0.999,
+      "grad_clip": 1.0,
+      "wavelet_weight": 0.0,
+      "self_pred_prob": 0.5,
+      "last_level_prob": 0.5,
+      "loss": {
+        "charbonnier": 1.0,
+        "fft": 0.05,
+        "ssim": 0.2,
+        "dists": 0.1,
+        "dists_start_frac": 0.5,
+        "dists_batch": 4
+      },
+      "visualize_every": 4,
+      "checkpoint_every": 1,
+      "log_every": 250,
+      "seed": 42
+    }
+  }
+}

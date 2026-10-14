@@ -1,4 +1,6 @@
-# Model comparison (a05–a19)
+# Model comparison (a05–a23)
+
+> **Update 2026-10-14:** round 4 (a20–a23, strictly generative models) is now benchmarked; see §9. None of them is yet a satisfactory generative submission: the two GANs ignore their noise, the 1-step diffusion model is borderline at −0.52 dB, the 2-step one is −2.1 dB. Sections 1–8 compare the regression models and remain valid as reference.
 
 > **Update 2026-10-11:** the brief requires a *generative* model. a19 is a regression network and is **not a compliant submission**; it is now the upper reference and the initialisation for the generative model. See `CURRENT_STATUS.md` and `PLAN.md`. The measurements below remain valid.
 
@@ -163,3 +165,63 @@ Quality counts on three axes, and a class competition usually has quality scores
 - **Checkpoint selection used benchmark v1**, so v1 numbers are very slightly optimistic. Benchmark v2 was not used for selection.
 - **Unequal training:** a19 has 3.3× the steps of everything else. The fair statement is "a15's configuration is best at 60k, and it scales well with training", not "a19's architecture is better".
 - 12 images per case. Single-case differences under ~0.3 dB are within image-sampling noise.
+
+## 9. Round 4: strictly generative models (a20–a23)
+
+All trained from scratch, v2 data, 60k steps, so **a15 is the like-for-like regression reference**; a19 (200k) is the upper reference. Diversity = mean per-pixel std over 8 noise seeds, grey levels of 255 (`results/<model>/generative_eval.json`); eligibility ≥ 0.5. Source: `results/comparison_round4/*.csv`.
+
+### 9.1 Overall
+
+| Model | Family | PSNR | SSIM | DISTS | GFLOPs | Diversity | Δ PSNR vs a15 | unseen_v2 | Eligible |
+|---|---|---|---|---|---|---|---|---|---|
+| a19 (ref.) | regression, 200k | 33.112 | 0.8743 | 0.1293 | 4.98 | 0 | +1.08 | 31.88 | no (regression) |
+| a15 (ref.) | regression, 60k | 32.034 | 0.8594 | 0.1537 | 4.98 | 0 | 0 | 30.99 | no (regression) |
+| a20_gan | GAN | **31.886** | **0.8554** | **0.1534** | 4.98 | 0.07 | −0.15 | 30.48 | no (noise ignored) |
+| a21_gan_wavelet | GAN + wavelet D/loss | 31.809 | 0.8551 | 0.1544 | 4.98 | 0.06 | −0.23 | **30.71** | no (noise ignored) |
+| a22_resdiff | residual diffusion, 1 step | 31.511 | 0.8499 | 0.1654 | 5.02 | 0.50 | −0.52 | 29.72 | borderline |
+| a23_resdiff_2step | residual diffusion, w16, 2 steps | 29.930 | 0.8115 | 0.2119 | 4.61 | 1.26 | −2.10 | 28.18 | yes, but worst |
+
+Round-4 rank table (all 19 benchmarked models, each axis ranked separately): a20 is 4th overall (avg rank 6.5), behind a19, a15, a16; a21 9th; a22 17th; a23 18th.
+
+### 9.2 By group (PSNR, dB)
+
+| Group | a15 | a20 | a21 | a22 | a23 |
+|---|---|---|---|---|---|
+| single | 34.89 | 34.61 | 34.50 | 34.21 | 32.13 |
+| extra | 34.52 | 34.71 | 34.78 | 33.60 | 32.06 |
+| pair | 30.53 | 30.37 | 30.30 | 30.10 | 28.80 |
+| triple | 29.36 | 29.21 | 29.17 | 29.10 | 28.10 |
+| unseen | 31.61 | 31.53 | 31.37 | 31.11 | 29.06 |
+| natural | 28.57 | 28.46 | 28.30 | 28.08 | 26.66 |
+| lowlight | 36.94 | 36.75 | 36.71 | 36.52 | 35.04 |
+| medical | 34.05 | 33.89 | 33.93 | 33.36 | 31.36 |
+| unseen_v2 | 30.99 | 30.48 | 30.71 | 29.72 | 28.18 |
+| plan (v2) | 36.21 | 35.98 | 35.86 | 36.39 | 33.77 |
+
+No GAN artifacts on medical or low-light: both GANs lose ≤ 0.2 dB there, about their overall loss.
+
+### 9.3 Per-case pattern
+
+- **GAN vs a15:** losses spread thin (most cases −0.1 to −0.3 dB); largest on `chromatic_aberration` −0.60 and `jpeg` −0.58; gain on `small_artifacts` +0.80.
+- **Diffusion (a22) vs a15:** losses concentrate on structured, information-preserving corruptions: `small_artifacts` −2.33, `salt_pepper` −1.30, `periodic_noise` −1.25, `chromatic_aberration` −1.09, `motion_blur` −1.04. Random-noise cases only −0.2 to −0.3. The sampling noise in `x_T` hides the fine structure these cases need.
+- **a23:** the same cases at −5.4 to −6.3 dB: the capacity-limited cases of the size study (as for a10).
+
+### 9.4 What each comparison isolates
+
+| Comparison | Isolates | Result |
+|---|---|---|
+| a20 − a15 | weak adversarial term (0.005) + learned noise | −0.15 dB, equal DISTS, noise switched off |
+| a21 − a20 | wavelet discriminator + wavelet L1 | −0.08 dB v1 (noise level), +0.24 dB `unseen_v2` |
+| a22 − a15 | residual diffusion objective, 1 step | −0.52 dB, +0.012 DISTS; diversity 0.50 |
+| a22 at 1 → 2 → 4 steps | more sampling, no retraining | −0.30, −0.83 dB; DISTS also worse |
+| a23 − a22 | half width, 2 steps, same FLOPs | −1.58 dB; second step itself −0.17 dB |
+
+### 9.5 Conclusions
+
+1. **The composite loss kills randomness.** For a random output, expected per-image error = error of the mean + variance. Every reconstruction term therefore pays the model to remove variance; the GAN obeys by switching its noise off (strength 0.0017), the diffusion model by erasing its start noise (and paying PSNR for the effort). Being generative needs a loss that does not punish variance (reconstruction on the **mean of several samples**) and a term that rewards it (adversarial at a meaningful weight, diversity-sensitive term).
+2. **One full-size pass is the only viable budget.** a23 and the a22 step sweep confirm a10: every extra step at ≤ 5 GFLOPs costs 0.3–2 dB.
+3. **The GAN machinery is sound.** a20 trains stably and costs only 0.15 dB at 60k, so a GAN that keeps the a20 recipe and adds the variance fix has the best chance of staying close to regression quality.
+4. **The wavelet discriminator is undecided**, not refuted: it was tested where the adversarial term had almost no influence.
+5. **Diffusion with reconstruction loss alone is not worth its cost.** It needs an adversarial term to make its noise produce realistic detail (diffusion + GAN), and training focused on the level actually sampled.
+
+Next experiments (round 5): `PLAN.md`.

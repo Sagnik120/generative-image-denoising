@@ -1,0 +1,5 @@
+architecture,PSNR (dB) [higher better],SSIM [higher better],DISTS [lower better],GFLOPs [lower better],Params (M)
+nafnet_unet,27.325,0.7522,0.228,12.822,14.34
+restormer_lite,27.442,0.7579,0.2352,11.287,2.98
+pix2pix_gan,26.539,0.72,0.246,12.822,14.34
+tiny_ddpm_sr3,10.01,0.0861,0.5223,4.667,1.99

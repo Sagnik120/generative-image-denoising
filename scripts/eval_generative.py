@@ -32,7 +32,7 @@ from src.registry import build_bundle, default_config_path, ARCHITECTURES
 from src.common.utils import get_device, load_yaml, load_checkpoint, save_json
 from src.common.dataset import BenchmarkDataset
 from src.common.metrics import evaluate_batch_per_image, compute_flops_and_params
-from src.common.gennet import reseed_noise
+from src.common.gennet import reseed_noise, set_noise_scale
 
 
 def parse_args():
@@ -43,6 +43,8 @@ def parse_args():
     p.add_argument("--checkpoint", default=None)
     p.add_argument("--steps", nargs="*", type=int, default=None,
                    help="Sampling step counts to evaluate (diffusion samplers only).")
+    p.add_argument("--noise_scales", nargs="*", type=float, default=[0.5, 1.0, 1.5],
+                   help="Test-time noise multipliers evaluated at the model's own step count.")
     p.add_argument("--seeds", type=int, default=8, help="Noise seeds for the diversity measurement.")
     p.add_argument("--diversity_images", type=int, default=96)
     p.add_argument("--batch_size", type=int, default=16)
@@ -103,19 +105,23 @@ def main():
     else:
         step_list = [1]
 
+    runs = [(k, 1.0) for k in step_list]
+    runs += [(default_steps, s) for s in args.noise_scales if s != 1.0]
     rows = []
-    for k in step_list:
+    for k, scale in runs:
         if has_steps:
             model.steps = k
-        row = {"steps": k, **score(model, loader, device)}
+        set_noise_scale(model, scale)
+        row = {"steps": k, "noise_scale": scale, **score(model, loader, device)}
         row["diversity"] = diversity(model, loader, device, args.seeds, args.diversity_images)
         row["gflops"] = compute_flops_and_params(model, device=device)["gflops"]
         rows.append(row)
-        print(f"[eval_generative] {args.arch} steps={k}: PSNR {row['psnr']:.3f}  "
+        print(f"[eval_generative] {args.arch} steps={k} noise x{scale:g}: PSNR {row['psnr']:.3f}  "
               f"SSIM {row['ssim']:.4f}  DISTS {row['dists']:.4f}  "
               f"{row['gflops']:.2f} GFLOPs  diversity {row['diversity']:.3f}/255", flush=True)
     if has_steps:
         model.steps = default_steps
+    set_noise_scale(model, 1.0)
 
     noise_strength = [m.weight.abs().mean().item() for m in model.modules()
                       if m.__class__.__name__ == "NoiseInjection"]

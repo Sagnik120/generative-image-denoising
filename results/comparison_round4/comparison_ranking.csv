@@ -1,0 +1,20 @@
+architecture,PSNR rank,SSIM rank,DISTS rank,GFLOPs rank,avg_rank
+a19_final,1.0,1.0,1.0,11.0,3.5
+a15_naf_degv2,2.0,2.0,5.0,11.0,5.0
+a16_naf_attn_degv2,3.0,3.0,9.0,5.0,5.0
+a20_gan,6.0,5.0,4.0,11.0,6.5
+a07_naf_attn_hybrid,7.0,4.0,10.0,7.0,7.0
+a05_nafnet_v2,4.0,8.0,6.0,11.0,7.25
+a11_freq_spatial,8.0,6.0,11.0,6.0,7.75
+a17_naf_dists0,10.0,10.5,3.0,11.0,8.625
+a21_gan_wavelet,11.0,7.0,7.0,11.0,9.0
+a09_wavelet_naf,5.0,9.0,8.0,17.0,9.75
+a18_naf_dists0_strong,13.0,14.0,2.0,11.0,10.0
+a08_degradation_aware,9.0,10.5,12.0,15.0,11.625
+a12_naf_w16,15.0,15.0,15.0,2.0,11.75
+a14_wavelet_w28,16.0,16.0,16.0,3.0,12.75
+a13_naf_w12,17.0,17.0,17.0,1.0,13.0
+a06_restormer_v2,12.0,12.0,13.0,16.0,13.25
+a22_resdiff,14.0,13.0,14.0,18.0,14.75
+a23_resdiff_2step,19.0,19.0,19.0,4.0,15.25
+a10_resflow_fewstep,18.0,18.0,18.0,19.0,18.25

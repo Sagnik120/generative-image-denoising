@@ -1,14 +1,16 @@
 # Current status
 
-Last updated 2026-10-11 (strict-generative revision). Supersedes the 2026-10-10 version, which treated "generative model" as an open question. It is a requirement. Next steps: `PLAN.md`. Model numbers: `COMPARISON.md`, `architectures/`.
+Last updated 2026-10-14 (after round 4). Next steps: `PLAN.md` (round 5). Model numbers: `COMPARISON.md` §9, `architectures/`.
 
 ## 1. Summary
 
-- **We do not have a compliant submission yet.** The brief asks for a *generative* model (title, §1). Our best model, a19_final, is a deterministic regression network: no noise input, no generative training objective, no sampling. It cannot be submitted as it is.
-- **None of the three earlier "generative" attempts is usable either** (§4): a03 (GAN) and a04 (diffusion) are from the old pipeline and performed badly; a10 (residual flow) is deterministic, so it is not strictly generative, and was under-sized per pass.
-- **Most of the work carries over** (§5): data, degradation pipeline v2, both benchmarks, the loss set, the NAF backbone, the size study, the training-length finding, and the tooling. a19 itself becomes the initialisation and the upper reference for the generative model.
-- **Decision (2026-10-11): strictly generative models only.** The submission must sample from a learned distribution: a noise input that measurably changes the output, a generative training objective, and the sampler of a recognised family (diffusion / flow, GAN). A regression network with a generative label, or a sampler whose noise is ignored, does not qualify. a19 is used only as a non-generative reference number.
-- **Next:** screen four strictly generative candidates trained from scratch (stochastic residual diffusion at 1/2/4 steps, equal-FLOPs 2-step diffusion, noise-conditioned GAN, diffusion + GAN), pick by the four ranked axes, train long, then distil to fewer steps if needed. Reasoning and literature in `PLAN.md`.
+- **Still no compliant submission.** a19 (33.11 dB) is regression. Round 4 trained four strictly generative candidates (a20–a23); none is yet a good generative submission:
+  - **a20 / a21 (GANs)**: best quality of round 4 (31.89 / 31.81 dB, only −0.15 / −0.23 dB vs the like-for-like regression a15), but they **switched their noise off** (diversity 0.07 / 0.06 grey levels, threshold 0.5). In practice deterministic.
+  - **a22 (residual diffusion, 1 step)**: diversity 0.50, exactly at the threshold; −0.52 dB and worse DISTS than a15. Sampling with 2 or 4 steps is worse still.
+  - **a23 (diffusion, width 16, 2 steps)**: clearly generative (1.26) but −2.1 dB; rejected.
+- **Root cause found:** every term of the composite loss compares one output with one target, so output variance is pure penalty. The GAN removes its noise; the diffusion model erases its start noise and pays PSNR for it.
+- **Kept:** the GAN machinery is stable and cheap in quality (−0.15 dB, no medical/low-light damage); one full-size pass is the only viable budget (a10, a22 sweep, a23 all agree).
+- **Next (round 5, `PLAN.md`):** a "stochastic recipe" (reconstruction loss on the mean of two samples, diversity term with a target, stronger adversarial weight) in a GAN (a24), a wavelet-discriminator GAN (a25) and a one-step diffusion + GAN (a26); a22 (60k) kept as the safety net; then the winner trained 200k steps. 5 days of experiments, day 6 for the report.
 
 ## 2. The brief, line by line
 
@@ -42,8 +44,9 @@ Every statement in `Mini Competition.pdf` that constrains us, and where we stand
 | | a10 residual flow, 2 steps | flow-style, **deterministic** | 30.35 dB, −1.6 dB vs a05, worst DISTS |
 | 3 (single changes on a05) | a12–a14 size, a15 degradations v2, a16 attention, a17–a18 DISTS weighting | regression | only v2 data accepted |
 | Final | a19 = a15 config, 200k steps | regression | 33.11 dB / 0.8743 / 0.1293 at 4.98 GFLOPs; best of all, **not compliant** |
+| 4 (60k, v2 data, from scratch) | a20 GAN, a21 GAN + wavelet D, a22 residual diffusion 1 step, a23 residual diffusion w16 2 steps | **strictly generative by design** | GANs −0.15/−0.23 dB vs a15 but noise ignored; a22 −0.52 dB, diversity 0.50; a23 −2.1 dB. None satisfactory yet |
 
-19 configurations; 16 were regression models. The generative requirement was recorded as a question for the instructor in both earlier status files and never treated as a constraint. That was the error, and it is why the best result is unusable as it stands.
+23 configurations; 16 were regression models. The generative requirement was recorded as a question for the instructor in both earlier status files and never treated as a constraint. That was the error, and it is why the best result is unusable as it stands.
 
 ## 4. What the earlier generative attempts actually tell us
 
@@ -84,24 +87,29 @@ Benchmark v1 (mean input PSNR 24.49 dB) and the `unseen_v2` group of benchmark v
 | a15 (60k) | regression, 60k reference | 32.03 | 0.8594 | 0.1537 | 4.98 | 30.99 |
 | a12 (60k, v1 data) | regression, small | 31.44 | 0.8468 | 0.1682 | 2.28 | 30.39 |
 | a10 (60k, v1 data) | deterministic 2-step flow | 30.35 | 0.8238 | 0.1976 | 5.04 | – |
+| a20 (60k) | GAN, diversity 0.07 | 31.89 | 0.8554 | 0.1534 | 4.98 | 30.48 |
+| a21 (60k) | GAN + wavelet D, diversity 0.06 | 31.81 | 0.8551 | 0.1544 | 4.98 | 30.71 |
+| a22 (60k) | residual diffusion 1 step, diversity 0.50 | 31.51 | 0.8499 | 0.1654 | 5.02 | 29.72 |
+| a23 (60k) | residual diffusion w16 2 steps, diversity 1.26 | 29.93 | 0.8115 | 0.2119 | 4.61 | 28.18 |
 
 Target for the generative model: as close to a19 as possible on PSNR/SSIM, equal or better on DISTS, at ≤5 GFLOPs in one step.
 
 ## 7. Risks
 
-1. **Strictness has a price on three axes.** A model that really samples loses PSNR/SSIM against the posterior mean (up to 3 dB in theory) and, if multi-step, multiplies FLOPs. `PLAN.md` measures this price for each candidate and picks the cheapest strictly generative operating point.
-2. **Quality cost of being generative.** Unknown until measured; the theory says up to 3 dB for exact posterior sampling and near zero for a one-step sampler.
-3. **Adversarial training stability** across three very different domains (natural, low-light, medical).
-4. **Unseen degradations** (unchanged from before): `glass_blur` +0.1 dB, `film_grain` DISTS 0.22.
-5. **Our benchmark is in-distribution** (unchanged).
+1. **The variance fix may not be enough** (a24/a26 still collapse). Remedies in order: raise the diversity target or adversarial weight; test-time noise scale; VAE latent noise (Option G). Safety net: the existing a22 checkpoint (60k) or the best eligible round-5 checkpoint.
+2. **Quality cost of real sampling.** Variance arithmetic: ~1–2 grey levels of sample spread should cost ~0.1–0.3 dB on top of a20's −0.15 dB. To be measured in round 5.
+3. **Time.** Screening (Day 1–2) plus a 200k run (~29 h for a GAN) leaves about one day of margin before day 6. No room for a second full round of screening.
+4. **Unseen degradations**: round-4 generative models are 0.3–1.3 dB below a15 on `unseen_v2`; `glass_blur`, `film_grain` remain weak.
+5. **Our benchmark is in-distribution** (unchanged). Model selection used benchmark v1.
 
 ## 8. Checklist
 
 - [x] Data, degradations v2, benchmarks v1/v2, tooling
 - [x] Backbone, size, loss and training-length studies (rounds 2–3)
 - [x] Regression reference a19
-- [ ] Generative model: screening runs a20–a23 (`PLAN.md` step 1)
-- [ ] Final long run (step 2); step distillation if needed (step 3)
-- [ ] Degradation v3, diagnostics, small sibling (step 4)
-- [ ] Export with sampler inside the model call; FLOPs with fvcore and ptflops; CPU inference test
-- [ ] 1–2 page report
+- [x] Round 4 screening a20–a23 (GAN, wavelet GAN, residual diffusion 1 and 2 steps) and diversity measurement
+- [x] Round 5 code: stochastic recipe, a24–a26, noise-scale sweep (CPU smoke-tested)
+- [ ] Round 5 screening a24, a25, a26 on two GPUs (`PLAN.md` Day 1–2)
+- [ ] Final long run of the winner (Day 2–4); optional width-16 sibling and v3 fine-tune
+- [ ] Export with sampler inside the model call; fvcore and ptflops; CPU test; diversity proof
+- [ ] 1–2 page report (Day 6)

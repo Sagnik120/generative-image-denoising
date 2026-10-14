@@ -18,6 +18,19 @@ Generator loss = composite loss (Charbonnier + FFT + SSIM + DISTS)
                  + wavelet_weight * L1 on Haar bands
                  + adv_weight * hinge adversarial term (ramped in from step 0).
 Discriminator loss = hinge + lazy R1 gradient penalty.
+
+Round 5 "stochastic recipe" (train.stochastic, off when absent): round 4
+showed the composite loss punishes output variance, so the GANs switched
+their noise off. With `samples: 2` every image of the batch is restored with
+two noise draws x1, x2 and
+  - the composite loss is applied to their mean (halves the variance penalty);
+  - `per_sample_charb` * Charbonnier keeps each single sample anchored;
+  - `div_weight` * max(0, div_target/255 - mean|x1 - x2|) pushes the samples
+    apart until they differ by ~div_target grey levels, then stops
+    (diversity-sensitive cGAN, Yang et al. 2019 / Mao et al. 2019, with a target);
+  - the adversarial term and the discriminator see every sample.
+The loader batch is the number of IMAGES; the generator sees batch * samples.
+Subclasses change the generator pass by overriding `generate` (a26).
 """
 import torch
 import torch.nn as nn
@@ -74,6 +87,11 @@ class GANBundle(RestorationBundle):
         self.r1_every = g.get("r1_every", 16)
         self.disc_input = g.get("disc_input", "rgb")
         self.wavelet_weight = t.get("wavelet_weight", 0.0)
+        st = dict(t.get("stochastic") or {})
+        self.samples = max(1, int(st.get("samples", 1)))
+        self.per_sample_charb = st.get("per_sample_charb", 0.0)
+        self.div_target = st.get("div_target", 0.0) / 255.0
+        self.div_weight = st.get("div_weight", 0.0)
         in_ch = 18 if self.disc_input == "wavelet" else 6
         self.disc = UNetDiscriminatorSN(in_ch, g.get("disc_feat", 32)).to(device)
         self.opt_d = torch.optim.AdamW(self.disc.parameters(), lr=self.base_lr,
@@ -89,6 +107,10 @@ class GANBundle(RestorationBundle):
             return torch.cat([haar_dwt(image)[:, 3:], haar_dwt(corrupted)[:, 3:]], dim=1)
         return torch.cat([image, corrupted], dim=1)
 
+    def generate(self, corrupted, clean):
+        """Generator pass used in training (clean is used by diffusion subclasses)."""
+        return self.model(corrupted)
+
     def train_step(self, corrupted, clean, labels=None):
         self.model.train()
         self.disc.train()
@@ -96,12 +118,16 @@ class GANBundle(RestorationBundle):
         for opt in (self.optimizer, self.opt_d):
             for group in opt.param_groups:
                 group["lr"] = lr
+        target = clean
+        if self.samples > 1:
+            corrupted = corrupted.repeat(self.samples, 1, 1, 1)
+            clean = clean.repeat(self.samples, 1, 1, 1)
         if self.on_cuda:
             corrupted = corrupted.contiguous(memory_format=torch.channels_last)
         amp = dict(device_type="cuda", dtype=torch.float16, enabled=self.use_amp)
 
         with torch.autocast(**amp):
-            pred = self.model(corrupted)
+            pred = self.generate(corrupted, clean)
         fake = pred.detach().float().clamp(0, 1)
 
         # ---- discriminator ----
@@ -129,9 +155,23 @@ class GANBundle(RestorationBundle):
         try:
             with torch.autocast(**amp):
                 adv = -self.disc(self._d_in(pred, corrupted)).float().mean()
-            loss, parts = self.criterion(pred, clean, self.step / self.total_steps)
+            if self.samples > 1:
+                draws = pred.float().chunk(self.samples)
+                recon = sum(draws) / self.samples
+                loss, parts = self.criterion(recon, target, self.step / self.total_steps)
+                if self.per_sample_charb > 0:
+                    per = self.criterion.pix(pred.float(), clean)
+                    loss = loss + self.per_sample_charb * per
+                    parts["pix_sample"] = per.item()
+                spread = (draws[0] - draws[1]).abs().mean()
+                if self.div_weight > 0:
+                    loss = loss + self.div_weight * F.relu(self.div_target - spread)
+                parts["spread255"] = spread.item() * 255.0
+            else:
+                recon = pred
+                loss, parts = self.criterion(pred, clean, self.step / self.total_steps)
             if self.wavelet_weight > 0:
-                parts["wave"] = wavelet_l1(pred, clean)
+                parts["wave"] = wavelet_l1(recon, target)
                 loss = loss + self.wavelet_weight * parts["wave"]
                 parts["wave"] = parts["wave"].item()
             ramp = min(1.0, (self.step + 1) / self.ramp_steps)
