@@ -1,4 +1,6 @@
-# Model comparison (a05–a23)
+# Model comparison (a05–a26)
+
+> **Update 2026-10-15:** round 5 (a24–a26) gives the first eligible generative models (diversity 1.5–1.8), at ~1 dB below their round-4 counterparts; best eligible is a25 (30.93 / 0.8372 / 0.1674). See §10.
 
 > **Update 2026-10-14:** round 4 (a20–a23, strictly generative models) is now benchmarked; see §9. None of them is yet a satisfactory generative submission: the two GANs ignore their noise, the 1-step diffusion model is borderline at −0.52 dB, the 2-step one is −2.1 dB. Sections 1–8 compare the regression models and remain valid as reference.
 
@@ -225,3 +227,55 @@ No GAN artifacts on medical or low-light: both GANs lose ≤ 0.2 dB there, about
 5. **Diffusion with reconstruction loss alone is not worth its cost.** It needs an adversarial term to make its noise produce realistic detail (diffusion + GAN), and training focused on the level actually sampled.
 
 Next experiments (round 5): `PLAN.md`.
+
+## 10. Round 5: stochastic recipe (a24–a26)
+
+Same data, backbone and 60k steps as round 4, from scratch; 8 images × 2 noise draws per step; composite loss on the mean of the two samples + 0.2 Charbonnier per sample + diversity hinge (2 grey levels) + adversarial 0.01. Source: `run_round5.log`, `results/a24..a26/`.
+
+### 10.1 Overall
+
+| Model | PSNR | SSIM | DISTS | GFLOPs | Diversity | unseen_v2 | Δ PSNR vs round-4 twin | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| a20 (ref., round 4) | 31.886 | 0.8554 | 0.1534 | 4.98 | 0.07 | 30.48 | – | no |
+| a24_gan_div | 30.907 | 0.8349 | **0.1666** | 4.98 | 1.69 | 29.68 | −0.98 (a20) | yes |
+| **a25_gan_div_wave** | **30.934** | **0.8372** | 0.1674 | 4.98 | 1.54 | **29.91** | −0.88 (a21) | **yes, best** |
+| a26_resdiff_gan | 30.637 | 0.8299 | 0.1775 | 5.02 | 1.79 | 28.46 | −0.87 (a22) | yes, rejected |
+
+Ranks among all 22 benchmarked models (each axis separately, average rank): a25 18th, a24 19th, a26 21st. Every eligible model is now below every regression model trained on v2 data.
+
+### 10.2 Noise-scale sweep (test-time multiplier, same checkpoint)
+
+| Model | ×0.5 PSNR / DISTS / div. | ×1 | ×1.5 |
+|---|---|---|---|
+| a24 | 30.94 / 0.1647 / 1.20 | 30.91 / 0.1666 / 1.69 | 30.81 / 0.1747 / 1.96 |
+| a25 | 30.92 / 0.1643 / 1.13 | 30.93 / 0.1674 / 1.54 | 30.89 / 0.1762 / 1.70 |
+| a26 | 30.88 / 0.1764 / 0.97 | 30.64 / 0.1775 / 1.79 | 30.19 / 0.1862 / 2.60 |
+
+For the GANs the noise level barely matters for PSNR (±0.05 dB) but more noise costs DISTS; ×0.5 is the best submission point (still ≥ 1.1 diversity). For a26 the noise is mostly harm.
+
+### 10.3 Where the dB went (a24 vs a20)
+
+- **Error budget:** RMS error 6.47 → 7.29 grey levels (MSE 41.8 → 53.2). Sample variance 1.69² ≈ 2.9, i.e. **~25%** of the increase. **~75% is a worse average output.**
+- **What it looks like:** over-smoothed, painterly outputs: fine texture (scales, coral, water, grass) flattened, small text blurred. Not grain.
+- **Which cases:** structured / exact-inverse cases and deblurring lose most (`small_artifacts` −3.90, `periodic_noise` −1.65, `salt_pepper` −1.57, `chromatic_aberration` −1.36, blurs −1.2); `jpeg` −0.43, `resize_blur` −0.16. Domains equal (≈ −1 dB each): no adversarial artifacts.
+- **Cause (by elimination):**
+  - not the test-time variance (noise sweep: ±0.05 dB);
+  - not the feature-level noise injection (a26 has none and lost the same 0.87 dB);
+  - shared by a24 and a26: per-sample reconstruction gradient cut to ~0.7× (loss on the mean of two), 8 instead of 16 images per step, adversarial weight 2× on a near-chance discriminator (D loss 1.73–1.86 of 2.0). The gap to a20 is already 0.87 dB at epoch 4, before the batch effect can matter much, so the loss reweighting is the main suspect.
+
+### 10.4 Wavelet discriminator, second confirmation
+
+| Pair | v1 PSNR | unseen_v2 |
+|---|---|---|
+| a21 − a20 | −0.08 | **+0.24** |
+| a25 − a24 | +0.03 | **+0.23** |
+
+Neutral on the training families, consistently +0.23 dB on never-seen families. Helps noise cases, hurts deblurring and periodic patterns (it sees only the detail bands).
+
+### 10.5 Conclusions
+
+1. **Eligibility is solved; quality is not.** All three models really sample (diversity 1.5–1.8 vs 0.07).
+2. **Variance is cheap; the way it was bought was not.** ~0.25 dB for the variance, ~0.75 dB for weakening the per-sample loss and the batch. The fix is to keep the per-sample composite loss at full weight (a20) and enforce a small variance by a constraint on a few extra draws (round 6, `PLAN.md`).
+3. **Keep the wavelet discriminator** for the final model (+0.23 dB unseen, twice).
+4. **Diffusion is closed** at ≤ 5 GFLOPs (a22, a23, a26 all behind the GAN; more steps always worse).
+5. **Training length is still untested for generative models**; for regression it was worth +1.08 dB (a15 → a19).

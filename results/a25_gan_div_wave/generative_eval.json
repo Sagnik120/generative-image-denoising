@@ -1,0 +1,35 @@
+{
+  "architecture": "a25_gan_div_wave",
+  "checkpoint": "/DATA1/shrusti/genai_project/results/a25_gan_div_wave/checkpoints/best_model.pt",
+  "seeds": 8,
+  "results": [
+    {
+      "steps": 1,
+      "noise_scale": 1.0,
+      "psnr": 30.9335981943357,
+      "ssim": 0.8372307322261997,
+      "dists": 0.1673560669325819,
+      "diversity": 1.5413566827774048,
+      "gflops": 4.97750016
+    },
+    {
+      "steps": 1,
+      "noise_scale": 0.5,
+      "psnr": 30.92113684400175,
+      "ssim": 0.8392269469161664,
+      "dists": 0.1643177621593379,
+      "diversity": 1.131157139937083,
+      "gflops": 4.97750016
+    },
+    {
+      "steps": 1,
+      "noise_scale": 1.5,
+      "psnr": 30.89306459513759,
+      "ssim": 0.8343568665194632,
+      "dists": 0.17615566244631103,
+      "diversity": 1.7029974659283955,
+      "gflops": 4.97750016
+    }
+  ],
+  "mean_noise_strength": 0.019778846401297616
+}

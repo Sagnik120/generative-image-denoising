@@ -6,6 +6,8 @@ How to read the sources: every idea in the "can be explored" sections names its 
 
 ---
 
+> **Update 2026-10-15 (after rounds 4–5).** Options tested: A (a20, a21, a24, a25), B (a22, a23), D (a26), wavelet discriminator §5.3 (a21, a25). Outcome: A is the only viable family at ≤ 5 GFLOPs; B and D are closed (behind A on every metric, more steps always worse). Making A really sample cost ~1 dB with the round-5 recipe. New options H–K (§3, after Option G) address that cost. Results: `COMPARISON.md` §9–10.
+
 ## 0. The task in short
 
 From `Mini Competition.pdf`:
@@ -258,6 +260,45 @@ Each option says: the idea, the source, the FLOPs situation, and how to make it 
 - **Sources.** Prakash et al., "Fully Unsupervised Diversity Denoising with Convolutional Variational Autoencoders (DivNoising)", ICLR 2021 (from memory): a VAE that produces diverse denoised samples. Zhu et al., "Toward Multimodal Image-to-Image Translation (BicycleGAN)", NeurIPS 2017 (from memory): VAE + conditional GAN so that the noise is not ignored.
 - **FLOPs.** A latent-vector encoder at low resolution adds a few percent.
 - **Verdict.** Only if Option A's noise turns out to be ignored.
+
+### Status of A–G after rounds 4–5
+
+| Option | Tested as | Result | Status |
+|---|---|---|---|
+| A. Conditional GAN | a20, a21 (round 4), a24, a25 (round 5) | stable, no medical/low-light artifacts; noise ignored unless forced; forced → −1 dB | **main family** |
+| B. Residual diffusion | a22 (1 step), a23 (2 steps, w16) | −0.52 / −2.1 dB vs a15; more steps worse | closed |
+| C. Distillation | – | needs a good multi-step teacher, which B did not give | dropped |
+| D. Diffusion + GAN | a26 | −0.27 dB vs a24, noise mostly harmful | closed |
+| E. Wavelet / latent steps | – | only useful for multi-step, which is closed | dropped |
+| F. Flow matching | – | same situation as B | dropped |
+| G. VAE latent noise | – | not needed: round 5 shows the noise can be forced to matter | held back |
+
+### Option H. Variance-controlled cGAN: full per-sample loss + diversity constraint (round 6, a27)
+
+- **Idea.** The round-5 recipe applied the reconstruction loss to the mean of two samples. That halves each sample's reconstruction gradient, and the outputs became over-smoothed (−0.75 dB from a worse average output, only −0.25 dB from the variance itself). Instead, keep the composite loss on **every** sample at full weight, as in a20, which had the best GAN quality. Buy the variance with a **constraint**: a diversity hinge, active, on a few extra noise draws per batch. The model then pays exactly the minimum variance needed, and the batch stays at 16 images.
+- **Sources.**
+  - Bendel, Ahmad & Schniter, "A Regularized Conditional GAN for Posterior Sampling in Image Recovery Problems" (rcGAN), NeurIPS 2023 ([paper](https://proceedings.neurips.cc/paper_files/paper/2023/hash/d8b29f07599fecdba93d87ed27a65524-Abstract-Conference.html), [code](https://github.com/matt-bendel/rcGAN)). An ℓ1 penalty plus an **adaptively weighted standard-deviation reward**; the weight is tuned during training so that the sample variance matches a target. Our hinge with a target is a simple form of the same control.
+  - Ohayon, Adrai, Vaksman, Elad & Milanfar, "High Perceptual Quality Image Denoising with a Posterior Sampling CGAN", ICCVW 2021 ([arXiv 2103.04192](https://arxiv.org/abs/2103.04192)). A penalty on the **mean of the samples** (first-moment penalty) instead of each sample: this is our round-5 recipe. It is designed for perceptual quality and accepts the distortion cost, which matches what we measured.
+  - Blau & Michaeli, "The Perception-Distortion Tradeoff", CVPR 2018 ([paper](https://openaccess.thecvf.com/content_cvpr_2018/html/Blau_The_Perception-Distortion_Tradeoff_CVPR_2018_paper.html)). Lower distortion and better perceptual quality conflict, which is why the scored PSNR/SSIM push towards the least random model that is still eligible.
+- **FLOPs.** None at inference (training-only change). Training cost +25% (16 images + 4 extra draws).
+- **Risk.** At full per-sample weight the noise is penalised again; the hinge has to win. Monitor `train_spread255`.
+
+### Option I. Two-stage training: reconstruction first, then adversarial + diversity (round 6, a28)
+
+- **Idea.** Train the noisy generator with the composite loss only for the first half (this is what a20 effectively became), then switch on the adversarial and diversity terms for the second half. This is the standard recipe of the GAN restorers that keep high PSNR.
+- **Sources.** Ledig et al., "SRGAN", CVPR 2017; Wang et al., "ESRGAN", ECCVW 2018; Wang et al., "Real-ESRGAN", ICCVW 2021 (all from memory). Each pre-trains a PSNR-oriented network, then fine-tunes it with GAN losses. ESRGAN also interpolates the weights of the two stages to dial the trade-off (**network interpolation**, zero extra training).
+- **FLOPs.** None at inference.
+- **Trade-off with our rules.** The generator has its noise input from step 0, but the generative loss starts at 50%, so this relaxes plan decision "generative loss from the first step". The final model is still a GAN trained adversarially that samples. Use it only if a27 cannot close the gap.
+
+### Option J. Test-time noise scale (temperature)
+
+- **Idea.** Scale the noise at inference to trade diversity for quality, as SRFlow does with its sampling temperature (Lugmayr et al., "SRFlow", ECCV 2020, from memory).
+- **Measured (round 5).** For the GANs ×0.5 changes PSNR by ≤ 0.05 dB, improves DISTS by ~0.003 and keeps diversity ≥ 1.1. **Adopted**: free, choose per final model.
+
+### Option K. Normalising-flow restorer with temperature (not now)
+
+- **Idea.** SRFlow-style conditional flow: exact likelihood, sampling with a temperature; at low temperature it is close to the average answer.
+- **Why not now.** New architecture family, invertible layers are FLOP-heavy at 256 px, and there is no time to tune it within the deadline. Noted for the report as related work.
 
 ### Not worth exploring, with reasons
 

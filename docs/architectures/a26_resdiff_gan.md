@@ -15,4 +15,29 @@ Round 5. Plan: `../PLAN.md` §5. Code: `src/common/resdiff.py::ResDiffGANBundle`
 **Data and schedule:** pipeline v2, 8 images × 2 draws per step, 60k steps, from scratch.
 
 ## Results
-Pending. Fill in from `results/a26_resdiff_gan/metrics/`. Reference: a22 31.511 / 0.8499 / 0.1654, diversity 0.50.
+Benchmark v1, 60k steps, single seed. Run time 6.7 h (incl. evaluation).
+
+| Steps / noise scale | PSNR | SSIM | DISTS | GFLOPs | Diversity |
+|---|---|---|---|---|---|
+| 1 step, ×0.5 | 30.880 | 0.8363 | 0.1764 | 5.02 | 0.97 |
+| **1 step, ×1 (as trained)** | **30.637** | **0.8299** | **0.1775** | 5.02 | **1.79** |
+| 1 step, ×1.5 | 30.192 | 0.8180 | 0.1862 | 5.02 | 2.60 |
+| 2 steps | 29.230 | 0.7916 | 0.2024 | 10.04 | 3.61 |
+| 4 steps | 27.714 | 0.7291 | 0.2285 | 20.08 | 5.71 |
+| a22 (ref., same diffusion, no GAN) | 31.511 | 0.8499 | 0.1654 | 5.02 | 0.50 |
+
+| Group | single | extra | pair | triple | unseen | natural | lowlight | medical | unseen_v2 | plan (v2) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| PSNR | 33.14 | 32.42 | 29.36 | 28.57 | 30.07 | 27.27 | 35.52 | 32.48 | 28.46 | 34.46 |
+| vs a22 | −1.07 | −1.18 | −0.74 | −0.53 | −1.04 | −0.81 | −1.00 | −0.87 | −1.27 | −1.94 |
+
+`train_spread255` 2.5–2.7 throughout; validation PSNR flat from epoch 20 (30.64 → 30.62).
+
+## Analysis
+- **Eligible (1.79) but the weakest round-5 model:** −0.87 dB vs a22, −0.27 vs a24, worst DISTS of the round (0.1775). Last in the overall ranking of all 22 models apart from a10.
+- **Same cause as a24** (halved per-sample reconstruction gradient, 8 images per step, stronger adversarial weight on a weak discriminator), on top of a22's own cost of carrying input noise. Its per-case losses repeat a22's pattern, deeper: `small_artifacts` −2.26, `periodic_noise` −1.70, `chromatic_aberration` −1.34, `salt_pepper` −1.11 vs a22.
+- **The noise is not used well:** halving it at test time *gains* +0.24 dB with DISTS almost unchanged; ×1.5 loses 0.45 dB. Unlike the GANs, a26's variance is mostly harm.
+- **More steps are still much worse** (−1.4 dB at 2 steps, −2.9 at 4), with diversity rising to 5.7: each extra pass adds noise the model cannot convert into detail.
+- **Generalisation is poor:** `unseen_v2` 28.46, −1.23 below a24.
+
+**Verdict: rejected. The diffusion line (a22, a23, a26) is closed: at ≤ 5 GFLOPs it is behind the GAN on every metric in every round.**
