@@ -31,6 +31,16 @@ two noise draws x1, x2 and
   - the adversarial term and the discriminator see every sample.
 The loader batch is the number of IMAGES; the generator sees batch * samples.
 Subclasses change the generator pass by overriding `generate` (a26).
+
+Round 6 "pair" mode (train.stochastic.pair_images > 0; replaces `samples`):
+round 5 lost ~1 dB because the loss on the mean weakened each sample's
+reconstruction signal. Here every output gets the full composite loss (as
+a20), the batch keeps all its images, and only the first `pair_images`
+images get a second noise draw; the diversity hinge on those pairs is the
+constraint that keeps the noise in use. `gan.adv_start_frac` > 0 switches the
+adversarial term (and discriminator training) on only from that fraction of
+training (a28: reconstruction warm-up with the diversity constraint, then
+adversarial training, as SRGAN / ESRGAN / Real-ESRGAN).
 """
 import torch
 import torch.nn as nn
@@ -85,6 +95,7 @@ class GANBundle(RestorationBundle):
         self.ramp_steps = max(1, g.get("ramp_steps", 5000))
         self.r1_gamma = g.get("r1_gamma", 1.0)
         self.r1_every = g.get("r1_every", 16)
+        self.adv_start = int(g.get("adv_start_frac", 0.0) * self.total_steps)
         self.disc_input = g.get("disc_input", "rgb")
         self.wavelet_weight = t.get("wavelet_weight", 0.0)
         st = dict(t.get("stochastic") or {})
@@ -92,6 +103,9 @@ class GANBundle(RestorationBundle):
         self.per_sample_charb = st.get("per_sample_charb", 0.0)
         self.div_target = st.get("div_target", 0.0) / 255.0
         self.div_weight = st.get("div_weight", 0.0)
+        self.pair_images = int(st.get("pair_images", 0))
+        if self.pair_images > 0:
+            self.samples = 1
         in_ch = 18 if self.disc_input == "wavelet" else 6
         self.disc = UNetDiscriminatorSN(in_ch, g.get("disc_feat", 32)).to(device)
         self.opt_d = torch.optim.AdamW(self.disc.parameters(), lr=self.base_lr,
@@ -111,27 +125,7 @@ class GANBundle(RestorationBundle):
         """Generator pass used in training (clean is used by diffusion subclasses)."""
         return self.model(corrupted)
 
-    def train_step(self, corrupted, clean, labels=None):
-        self.model.train()
-        self.disc.train()
-        lr = self._lr_at(self.step)
-        for opt in (self.optimizer, self.opt_d):
-            for group in opt.param_groups:
-                group["lr"] = lr
-        target = clean
-        if self.samples > 1:
-            corrupted = corrupted.repeat(self.samples, 1, 1, 1)
-            clean = clean.repeat(self.samples, 1, 1, 1)
-        if self.on_cuda:
-            corrupted = corrupted.contiguous(memory_format=torch.channels_last)
-        amp = dict(device_type="cuda", dtype=torch.float16, enabled=self.use_amp)
-
-        with torch.autocast(**amp):
-            pred = self.generate(corrupted, clean)
-        fake = pred.detach().float().clamp(0, 1)
-
-        # ---- discriminator ----
-        self.opt_d.zero_grad(set_to_none=True)
+    def _disc_step(self, clean, corrupted, fake, amp):
         with torch.autocast(**amp):
             d_real = self.disc(self._d_in(clean, corrupted))
             d_fake = self.disc(self._d_in(fake, corrupted))
@@ -147,18 +141,59 @@ class GANBundle(RestorationBundle):
             self.scaler_d.scale(loss_d).backward()
             self.scaler_d.step(self.opt_d)
             self.scaler_d.update()
+        return loss_d
+
+    def train_step(self, corrupted, clean, labels=None):
+        self.model.train()
+        self.disc.train()
+        lr = self._lr_at(self.step)
+        for opt in (self.optimizer, self.opt_d):
+            for group in opt.param_groups:
+                group["lr"] = lr
+        target, n_img = clean, corrupted.shape[0]
+        k = min(self.pair_images, n_img)
+        if k > 0:            # round 6: second noise draw for the first k images only
+            corrupted = torch.cat([corrupted, corrupted[:k]])
+            clean = target = torch.cat([clean, clean[:k]])
+        elif self.samples > 1:
+            corrupted = corrupted.repeat(self.samples, 1, 1, 1)
+            clean = clean.repeat(self.samples, 1, 1, 1)
+        if self.on_cuda:
+            corrupted = corrupted.contiguous(memory_format=torch.channels_last)
+        amp = dict(device_type="cuda", dtype=torch.float16, enabled=self.use_amp)
+
+        with torch.autocast(**amp):
+            pred = self.generate(corrupted, clean)
+        fake = pred.detach().float().clamp(0, 1)
+        adv_on = self.step >= self.adv_start
+
+        # ---- discriminator (only once the adversarial phase has started) ----
+        self.opt_d.zero_grad(set_to_none=True)
+        loss_d = self._disc_step(clean, corrupted, fake, amp) if adv_on \
+            else torch.zeros((), device=fake.device)
 
         # ---- generator ----
         self.optimizer.zero_grad(set_to_none=True)
         for p in self.disc.parameters():
             p.requires_grad_(False)
         try:
-            with torch.autocast(**amp):
-                adv = -self.disc(self._d_in(pred, corrupted)).float().mean()
-            if self.samples > 1:
+            adv = torch.zeros((), device=fake.device)
+            if adv_on:
+                with torch.autocast(**amp):
+                    adv = -self.disc(self._d_in(pred, corrupted)).float().mean()
+            progress = self.step / self.total_steps
+            if k > 0:
+                # full composite loss on every output; diversity hinge on the k pairs
+                recon = pred
+                loss, parts = self.criterion(pred, clean, progress)
+                spread = (pred[:k].float() - pred[n_img:].float()).abs().mean()
+                if self.div_weight > 0:
+                    loss = loss + self.div_weight * F.relu(self.div_target - spread)
+                parts["spread255"] = spread.item() * 255.0
+            elif self.samples > 1:
                 draws = pred.float().chunk(self.samples)
                 recon = sum(draws) / self.samples
-                loss, parts = self.criterion(recon, target, self.step / self.total_steps)
+                loss, parts = self.criterion(recon, target, progress)
                 if self.per_sample_charb > 0:
                     per = self.criterion.pix(pred.float(), clean)
                     loss = loss + self.per_sample_charb * per
@@ -169,13 +204,14 @@ class GANBundle(RestorationBundle):
                 parts["spread255"] = spread.item() * 255.0
             else:
                 recon = pred
-                loss, parts = self.criterion(pred, clean, self.step / self.total_steps)
+                loss, parts = self.criterion(pred, clean, progress)
             if self.wavelet_weight > 0:
                 parts["wave"] = wavelet_l1(recon, target)
                 loss = loss + self.wavelet_weight * parts["wave"]
                 parts["wave"] = parts["wave"].item()
-            ramp = min(1.0, (self.step + 1) / self.ramp_steps)
-            loss = loss + self.adv_weight * ramp * adv
+            if adv_on:
+                ramp = min(1.0, (self.step - self.adv_start + 1) / self.ramp_steps)
+                loss = loss + self.adv_weight * ramp * adv
             if not torch.isfinite(loss):
                 return self._skip_step()
             self.scaler.scale(loss).backward()

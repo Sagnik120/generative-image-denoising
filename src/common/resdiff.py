@@ -63,6 +63,7 @@ class ResDiffSampler(nn.Module):
         self.net = net
         self.timesteps, self.steps, self.kappa = timesteps, steps, kappa
         self.noise_scale = 1.0       # test-time noise-scale sweep only
+        self.fresh = False           # True: new noise every call in eval mode too
         self.eta = [(i / timesteps) ** eta_power for i in range(timesteps + 1)]
         self.register_buffer("eval_noise", torch.zeros(timesteps, 3, image_size, image_size))
         self.reseed(0)
@@ -81,8 +82,8 @@ class ResDiffSampler(nn.Module):
         return like.new_full((like.shape[0],), level * 1000.0 / self.timesteps)
 
     def _noise(self, like, i):
-        if self.training or self.eval_noise.shape[-2:] != like.shape[-2:]:
-            return torch.randn_like(like)
+        if self.training or self.fresh or self.eval_noise.shape[-2:] != like.shape[-2:]:
+            return self.noise_scale * torch.randn_like(like) if self.fresh else torch.randn_like(like)
         return self.noise_scale * self.eval_noise[i:i + 1].to(like.dtype)
 
     def forward(self, corrupted):

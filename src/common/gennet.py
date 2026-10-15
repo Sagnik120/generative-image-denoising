@@ -32,6 +32,7 @@ class NoiseInjection(nn.Module):
         super().__init__()
         self.weight = nn.Parameter(torch.full((1, channels, 1, 1), float(init)))
         self.scale = 1.0
+        self.fresh = False           # True: new noise every call in eval mode too (submission)
         self.index = index
         self.register_buffer("eval_noise", torch.zeros(1, 1, res, res))
         self.reseed(0)
@@ -43,7 +44,7 @@ class NoiseInjection(nn.Module):
 
     def forward(self, x):
         b, _, h, w = x.shape
-        if self.training or self.eval_noise.shape[-2:] != (h, w):
+        if self.training or self.fresh or self.eval_noise.shape[-2:] != (h, w):
             noise = torch.randn(b, 1, h, w, device=x.device, dtype=x.dtype)
         else:
             noise = self.eval_noise.to(x.dtype)
@@ -57,6 +58,14 @@ def set_noise_scale(model, scale):
             m.scale = float(scale)
         if hasattr(m, "noise_scale"):
             m.noise_scale = float(scale)
+
+
+def set_fresh_noise(model, fresh=True):
+    """fresh=True: every call draws new noise (a true sampler, used by the
+    submission). fresh=False: the seeded buffers are used (reproducible)."""
+    for m in model.modules():
+        if hasattr(m, "fresh"):
+            m.fresh = bool(fresh)
 
 
 def reseed_noise(model, seed):

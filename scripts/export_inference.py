@@ -91,12 +91,25 @@ def _load_model():
     return _model, _device
 
 
+def _set_noise(model, seed):
+    """Generative models: seed=None draws fresh noise on every call (a new sample
+    each time); an integer seed gives a fixed, reproducible sample. No effect on
+    models without a noise input."""
+    for m in model.modules():
+        if hasattr(m, "fresh"):
+            m.fresh = seed is None
+            if seed is not None and hasattr(m, "reseed"):
+                m.reseed(seed)
+
+
 @torch.no_grad()
-def denoise_image(corrupted_uint8: np.ndarray) -> np.ndarray:
-    """corrupted_uint8: (256, 256, 3) uint8 RGB array. Returns (256, 256, 3) uint8 RGB."""
+def denoise_image(corrupted_uint8: np.ndarray, seed=None) -> np.ndarray:
+    """corrupted_uint8: (256, 256, 3) uint8 RGB array. Returns (256, 256, 3) uint8 RGB.
+    seed: None = new random sample per call; int = reproducible sample."""
     assert corrupted_uint8.shape == (256, 256, 3), \\
         f"Expected (256, 256, 3), got {{corrupted_uint8.shape}}"
     model, device = _load_model()
+    _set_noise(model, seed)
 
     x = corrupted_uint8.astype(np.float32) / 255.0
     x = torch.from_numpy(x.transpose(2, 0, 1)).unsqueeze(0).to(device)
@@ -222,7 +235,7 @@ import sys, numpy as np, torch
 sys.path.insert(0, {sub!r})
 import inference
 img = np.load({inp!r})
-out = inference.denoise_image(img)
+out = inference.denoise_image(img, seed=0)
 assert out.shape == (256, 256, 3) and out.dtype == np.uint8, (out.shape, out.dtype)
 np.save({outp!r}, out)
 m = inference.load_model()

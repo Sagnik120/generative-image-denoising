@@ -54,6 +54,10 @@ ARCHITECTURES = {
     "a24_gan_div": "src.architectures.a24_gan_div.model",
     "a25_gan_div_wave": "src.architectures.a25_gan_div_wave.model",
     "a26_resdiff_gan": "src.architectures.a26_resdiff_gan.model",
+    # ---- round 6: full per-sample loss + diversity constraint; a25 long run ----
+    "a25_full": "src.architectures.a25_full.model",
+    "a27_gan_wave_varctl": "src.architectures.a27_gan_wave_varctl.model",
+    "a28_gan_wave_2stage": "src.architectures.a28_gan_wave_2stage.model",
 }
 
 # Architectures are numbered in the order they were added. Round 1 (a01-a04)
