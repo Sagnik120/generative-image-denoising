@@ -51,10 +51,22 @@ Round-4 conclusion: the composite loss penalises output variance, so a GAN switc
 
 ## Round 5 (a24–a26): stochastic recipe
 
-Same backbone, data v2, 60k steps, from scratch. Batch = 8 images × 2 noise draws. Generator loss: composite on the mean of the two samples + 0.2 Charbonnier per sample + diversity hinge (2 grey levels) + hinge adversarial 0.01. Evaluated also with test-time noise ×0.5 / ×1 / ×1.5. Results pending.
+Same backbone, data v2, 60k steps, from scratch. Batch = 8 images × 2 noise draws. Generator loss: composite on the mean of the two samples + 0.2 Charbonnier per sample + diversity hinge (2 grey levels) + hinge adversarial 0.01. Evaluated also with test-time noise ×0.5 / ×1 / ×1.5.
 
-| # | File | Model | Frequency | GFLOPs |
-|---|---|---|---|---|
-| 24 | [a24_gan_div](a24_gan_div.md) | a20 GAN + stochastic recipe | FFT loss, RGB discriminator | 4.98 |
-| 25 | [a25_gan_div_wave](a25_gan_div_wave.md) | a24 + wavelet discriminator + wavelet L1 | wavelet adversarial + fidelity | 4.98 |
-| 26 | [a26_resdiff_gan](a26_resdiff_gan.md) | one-step residual diffusion + GAN | FFT loss, RGB discriminator | 5.02 |
+| # | File | Model | Frequency | PSNR | SSIM | DISTS | GFLOPs | Diversity | Verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 24 | [a24_gan_div](a24_gan_div.md) | a20 GAN + stochastic recipe | FFT loss, RGB discriminator | 30.907 | 0.8349 | 0.1666 | 4.98 | 1.69 | eligible; −0.98 dB vs a20, over-smoothed |
+| 25 | [a25_gan_div_wave](a25_gan_div_wave.md) | a24 + wavelet discriminator + wavelet L1 | wavelet adversarial + fidelity | **30.934** | **0.8372** | 0.1674 | 4.98 | 1.54 | **best eligible**; +0.23 dB `unseen_v2` |
+| 26 | [a26_resdiff_gan](a26_resdiff_gan.md) | one-step residual diffusion + GAN | FFT loss, RGB discriminator | 30.637 | 0.8299 | 0.1775 | 5.02 | 1.79 | rejected; diffusion line closed |
+
+Round-5 conclusion: the noise now changes the output (eligible), but the recipe cost ~1 dB, of which only ~25% is the sample variance; the rest is a worse average output from the weakened per-sample reconstruction loss and the halved batch. Next (round 6, `../PLAN.md`): full per-sample composite loss + an active diversity constraint on a few extra draws (a27), a two-stage variant (a28), and a25 trained 200k steps as the compliant fallback.
+
+## Round 6 (a25_full, a27, a28): full per-sample loss + diversity constraint, and the long run
+
+Data v2, from scratch. a27/a28: 16 images per step + a second draw for 4 of them; composite + wavelet L1 on every output; diversity hinge 1.5 grey levels (weight 4.0); wavelet-domain discriminator, adversarial 0.005. Results pending.
+
+| # | File | Model | Steps | Frequency | GFLOPs |
+|---|---|---|---|---|---|
+| 25F | [a25_full](a25_full.md) | a25 unchanged (fallback) | 200k | wavelet D + wavelet L1 + FFT | 4.98 |
+| 27 | [a27_gan_wave_varctl](a27_gan_wave_varctl.md) | full per-sample loss + active diversity constraint, adversarial from step 0 | 60k | wavelet D + wavelet L1 + FFT | 4.98 |
+| 28 | [a28_gan_wave_2stage](a28_gan_wave_2stage.md) | a27, adversarial from 50% (diversity from step 0) | 60k | wavelet D + wavelet L1 + FFT | 4.98 |

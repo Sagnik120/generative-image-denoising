@@ -1,16 +1,16 @@
 # Current status
 
-Last updated 2026-10-14 (after round 4). Next steps: `PLAN.md` (round 5). Model numbers: `COMPARISON.md` §9, `architectures/`.
+Last updated 2026-10-15 (after round 5). Next steps: `PLAN.md` (round 6 + final run). Model numbers: `COMPARISON.md` §9–10, `architectures/`.
 
 ## 1. Summary
 
-- **Still no compliant submission.** a19 (33.11 dB) is regression. Round 4 trained four strictly generative candidates (a20–a23); none is yet a good generative submission:
-  - **a20 / a21 (GANs)**: best quality of round 4 (31.89 / 31.81 dB, only −0.15 / −0.23 dB vs the like-for-like regression a15), but they **switched their noise off** (diversity 0.07 / 0.06 grey levels, threshold 0.5). In practice deterministic.
-  - **a22 (residual diffusion, 1 step)**: diversity 0.50, exactly at the threshold; −0.52 dB and worse DISTS than a15. Sampling with 2 or 4 steps is worse still.
-  - **a23 (diffusion, width 16, 2 steps)**: clearly generative (1.26) but −2.1 dB; rejected.
-- **Root cause found:** every term of the composite loss compares one output with one target, so output variance is pure penalty. The GAN removes its noise; the diffusion model erases its start noise and pays PSNR for it.
-- **Kept:** the GAN machinery is stable and cheap in quality (−0.15 dB, no medical/low-light damage); one full-size pass is the only viable budget (a10, a22 sweep, a23 all agree).
-- **Next (round 5, `PLAN.md`):** a "stochastic recipe" (reconstruction loss on the mean of two samples, diversity term with a target, stronger adversarial weight) in a GAN (a24), a wavelet-discriminator GAN (a25) and a one-step diffusion + GAN (a26); a22 (60k) kept as the safety net; then the winner trained 200k steps. 5 days of experiments, day 6 for the report.
+- **We now have compliant generative models.** Round 5 (a24–a26) fixed the "noise switched off" problem of round 4: diversity 1.5–1.8 grey levels (a20: 0.07).
+  - **Best eligible: a25** (GAN, wavelet discriminator): **30.93 dB / 0.8372 / 0.1674 at 4.98 GFLOPs**, diversity 1.54, at 60k steps.
+  - a24 (RGB discriminator) ties it on v1; a26 (diffusion + GAN) is 0.3 dB lower and rejected. The diffusion line is closed.
+- **But being generative cost ~1 dB** vs the round-4 GANs (a20 31.89), 3–4× more than predicted. Only ~25% of that is the sample variance; ~75% is a worse average output: images are **over-smoothed and painterly** (texture flattened, text blurred), worst on deblurring and structured artifacts. Cause: the recipe weakened the per-sample reconstruction loss (loss on the mean of two samples) and halved the images per step.
+- **Two reliable findings to keep:** wavelet discriminator +0.23 dB on unseen families (twice); test-time noise ×0.5 is free (≤0.05 dB, slightly better DISTS).
+- **Next (round 6, `PLAN.md`):** start **a25 at 200k steps now** (compliant fallback, ~17 h); in parallel screen **a27** (full per-sample composite loss + an active diversity constraint on a few extra draws, 16 images per step) and **a28** (a27 with the adversarial term from 50%, diversity constraint from step 0); no round-6 diffusion model; train the winner 200k if it beats a25 by ≥ 0.4 dB at 60k.
+- Time: Day 2 of 6 (2026-10-15). Experiments until Day 5; Day 6 report.
 
 ## 2. The brief, line by line
 
@@ -44,9 +44,10 @@ Every statement in `Mini Competition.pdf` that constrains us, and where we stand
 | | a10 residual flow, 2 steps | flow-style, **deterministic** | 30.35 dB, −1.6 dB vs a05, worst DISTS |
 | 3 (single changes on a05) | a12–a14 size, a15 degradations v2, a16 attention, a17–a18 DISTS weighting | regression | only v2 data accepted |
 | Final | a19 = a15 config, 200k steps | regression | 33.11 dB / 0.8743 / 0.1293 at 4.98 GFLOPs; best of all, **not compliant** |
+| 5 (60k, v2, 8 images × 2 draws) | a24 GAN + stochastic recipe, a25 + wavelet D, a26 diffusion + GAN | **strictly generative, eligible** | diversity 1.5–1.8; −0.9 to −1.0 dB vs round-4 twins; best a25 30.93 dB |
 | 4 (60k, v2 data, from scratch) | a20 GAN, a21 GAN + wavelet D, a22 residual diffusion 1 step, a23 residual diffusion w16 2 steps | **strictly generative by design** | GANs −0.15/−0.23 dB vs a15 but noise ignored; a22 −0.52 dB, diversity 0.50; a23 −2.1 dB. None satisfactory yet |
 
-23 configurations; 16 were regression models. The generative requirement was recorded as a question for the instructor in both earlier status files and never treated as a constraint. That was the error, and it is why the best result is unusable as it stands.
+26 configurations; 16 were regression models. The generative requirement was recorded as a question for the instructor in both earlier status files and never treated as a constraint. That was the error, and it is why the best result is unusable as it stands.
 
 ## 4. What the earlier generative attempts actually tell us
 
@@ -91,25 +92,27 @@ Benchmark v1 (mean input PSNR 24.49 dB) and the `unseen_v2` group of benchmark v
 | a21 (60k) | GAN + wavelet D, diversity 0.06 | 31.81 | 0.8551 | 0.1544 | 4.98 | 30.71 |
 | a22 (60k) | residual diffusion 1 step, diversity 0.50 | 31.51 | 0.8499 | 0.1654 | 5.02 | 29.72 |
 | a23 (60k) | residual diffusion w16 2 steps, diversity 1.26 | 29.93 | 0.8115 | 0.2119 | 4.61 | 28.18 |
+| a24 (60k) | GAN + stochastic recipe, diversity 1.69 | 30.91 | 0.8349 | 0.1666 | 4.98 | 29.68 |
+| **a25 (60k)** | **GAN + wavelet D, diversity 1.54; best eligible** | **30.93** | **0.8372** | **0.1674** | 4.98 | **29.91** |
+| a26 (60k) | diffusion + GAN, diversity 1.79 | 30.64 | 0.8299 | 0.1775 | 5.02 | 28.46 |
 
 Target for the generative model: as close to a19 as possible on PSNR/SSIM, equal or better on DISTS, at ≤5 GFLOPs in one step.
 
 ## 7. Risks
 
-1. **The variance fix may not be enough** (a24/a26 still collapse). Remedies in order: raise the diversity target or adversarial weight; test-time noise scale; VAE latent noise (Option G). Safety net: the existing a22 checkpoint (60k) or the best eligible round-5 checkpoint.
-2. **Quality cost of real sampling.** Variance arithmetic: ~1–2 grey levels of sample spread should cost ~0.1–0.3 dB on top of a20's −0.15 dB. To be measured in round 5.
-3. **Time.** Screening (Day 1–2) plus a 200k run (~29 h for a GAN) leaves about one day of margin before day 6. No room for a second full round of screening.
-4. **Unseen degradations**: round-4 generative models are 0.3–1.3 dB below a15 on `unseen_v2`; `glass_blur`, `film_grain` remain weak.
-5. **Our benchmark is in-distribution** (unchanged). Model selection used benchmark v1.
+1. **a27 may not recover the lost dB** (the cause is inferred by elimination, not isolated). Fallback: a25 at 200k, running from Day 2.
+2. **Diversity may collapse again in a27** when the per-sample loss is at full weight; the hinge must stay active (`train_spread255` at its target). Remedy: higher hinge weight; noise ×1.5 at test time.
+3. **Time.** a25_full (~17 h) and a27/a28 screening (~13 h) run in parallel on Day 2–3; a 200k a27 run (~21 h) must start by Day 3 noon to finish on Day 4. No room for another screening round.
+4. **Over-smoothing** of fine texture and text (all models, worse in round 5); DISTS is our weakest axis relative to regression.
+5. **Unseen degradations** and **in-distribution benchmark** (unchanged).
 
 ## 8. Checklist
 
 - [x] Data, degradations v2, benchmarks v1/v2, tooling
-- [x] Backbone, size, loss and training-length studies (rounds 2–3)
-- [x] Regression reference a19
-- [x] Round 4 screening a20–a23 (GAN, wavelet GAN, residual diffusion 1 and 2 steps) and diversity measurement
-- [x] Round 5 code: stochastic recipe, a24–a26, noise-scale sweep (CPU smoke-tested)
-- [ ] Round 5 screening a24, a25, a26 on two GPUs (`PLAN.md` Day 1–2)
-- [ ] Final long run of the winner (Day 2–4); optional width-16 sibling and v3 fine-tune
-- [ ] Export with sampler inside the model call; fvcore and ptflops; CPU test; diversity proof
+- [x] Backbone, size, loss and training-length studies (rounds 2–3); regression reference a19
+- [x] Round 4 (a20–a23) and round 5 (a24–a26): first eligible generative models
+- [x] Round 6 code: a25_full, a27, a28; fresh noise per call in export (CPU smoke-tested)
+- [ ] Round 6 runs: a25_full (200k) + a27, a28 screening (`PLAN.md` Day 2–3)
+- [ ] Final 200k run of the winner (Day 3–4); noise-scale choice; optional v3 fine-tune
+- [ ] Export with sampler inside the model call; fvcore and ptflops; CPU test; diversity proof (Day 5)
 - [ ] 1–2 page report (Day 6)
