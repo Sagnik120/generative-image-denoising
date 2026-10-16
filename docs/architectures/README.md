@@ -63,10 +63,21 @@ Round-5 conclusion: the noise now changes the output (eligible), but the recipe 
 
 ## Round 6 (a25_full, a27, a28): full per-sample loss + diversity constraint, and the long run
 
-Data v2, from scratch. a27/a28: 16 images per step + a second draw for 4 of them; composite + wavelet L1 on every output; diversity hinge 1.5 grey levels (weight 4.0); wavelet-domain discriminator, adversarial 0.005. Results pending.
+Data v2, from scratch. a27/a28: 16 images per step + a second draw for 4 of them; composite + wavelet L1 on every output; diversity hinge 1.5 grey levels (weight 4.0); wavelet-domain discriminator, adversarial 0.005.
 
-| # | File | Model | Steps | Frequency | GFLOPs |
-|---|---|---|---|---|---|
-| 25F | [a25_full](a25_full.md) | a25 unchanged (fallback) | 200k | wavelet D + wavelet L1 + FFT | 4.98 |
-| 27 | [a27_gan_wave_varctl](a27_gan_wave_varctl.md) | full per-sample loss + active diversity constraint, adversarial from step 0 | 60k | wavelet D + wavelet L1 + FFT | 4.98 |
-| 28 | [a28_gan_wave_2stage](a28_gan_wave_2stage.md) | a27, adversarial from 50% (diversity from step 0) | 60k | wavelet D + wavelet L1 + FFT | 4.98 |
+| # | File | Model | Steps | PSNR (×1 / ×0.5) | SSIM | DISTS | Diversity (×1 / ×0.5) | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| 25F | [a25_full](a25_full.md) | a25 unchanged | 200k | **32.005 / 32.024** | **0.8566** | **0.1410** | 1.34 / 1.04 | **best compliant model**; = a15 PSNR, 2nd-best DISTS of all |
+| 27 | [a27_gan_wave_varctl](a27_gan_wave_varctl.md) | full per-sample loss + active diversity constraint | 60k | 31.237 / 31.391 | 0.8489 | 0.1601 | 1.10 / 0.64 | +0.47 dB over a25 at ×0.5; goes to 200k |
+| 28 | [a28_gan_wave_2stage](a28_gan_wave_2stage.md) | a27, adversarial from 50% | 60k | 31.154 / 31.451 | 0.8511 | 0.1582 | 1.28 / 0.74 | tie with a27; worse low-light / unseen; dropped |
+
+Round-6 conclusion: long training works for the generative model (+1.07 dB). The full per-sample loss recovers a third of round 5's loss. The rest is the cost of forced noise in the encoder path (a28 phase 1 isolates it: −0.7 dB with no adversarial term). Next (round 7, `../PLAN.md`): a27 at 200k, and a29 with noise only in the decoder, gated per pixel.
+
+## Round 7 (a27_full, a29): final long runs on data v3
+
+200k steps, from scratch, data v3 (v2 + `demosaic_artifacts`, `chroma_noise`, `mri_ghosting`, `ct_ring_artifact`; 12% clean inputs). Recipe of a27 (full per-sample loss + diversity constraint 1.5, wavelet discriminator, adversarial 0.005). Evaluated also on the v3 check set (96 images) and at noise ×0.5 / 0.6 / 0.75 / 1 / 1.5. Results pending.
+
+| # | File | Model | Noise | GFLOPs |
+|---|---|---|---|---|
+| 27F | [a27_full](a27_full.md) | a27 at 200k | after all 18 NAF blocks, per-channel strength | 4.978 |
+| 29 | [a29_gan_decnoise](a29_gan_decnoise.md) | a27_full with decoder-only, per-pixel gated noise | after the 5 decoder blocks, × learned per-pixel gate | 4.982 |
