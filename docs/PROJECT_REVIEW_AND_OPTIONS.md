@@ -6,6 +6,8 @@ How to read the sources: every idea in the "can be explored" sections names its 
 
 ---
 
+> **Update 2026-10-16 (after round 6).** Option H (a27) helped (+0.47 dB at 60k); Option I (a28, two-stage) tied it and was dropped; Option J (noise scale) adopted. New Option L addresses the remaining cost: where the noise enters the network.
+
 > **Update 2026-10-15 (after rounds 4–5).** Options tested: A (a20, a21, a24, a25), B (a22, a23), D (a26), wavelet discriminator §5.3 (a21, a25). Outcome: A is the only viable family at ≤ 5 GFLOPs; B and D are closed (behind A on every metric, more steps always worse). Making A really sample cost ~1 dB with the round-5 recipe. New options H–K (§3, after Option G) address that cost. Results: `COMPARISON.md` §9–10.
 
 ## 0. The task in short
@@ -299,6 +301,32 @@ Each option says: the idea, the source, the FLOPs situation, and how to make it 
 
 - **Idea.** SRFlow-style conditional flow: exact likelihood, sampling with a temperature; at low temperature it is close to the average answer.
 - **Why not now.** New architecture family, invertible layers are FLOP-heavy at 256 px, and there is no time to tune it within the deadline. Noted for the report as related work.
+
+### Option L. Decoder-only, per-pixel gated noise (round 7, a29)
+
+- **Evidence that motivates it (ours).**
+  - Forcing the noise to matter costs ~0.7 dB even with no adversarial term (a28 phase 1 vs a20).
+  - The loss falls on structured, exact-inverse corruptions in every model whose noise enters the encoder path (a22/a26 at the input, a24–a28 after every block), not in a20 (noise off).
+  - Mild corruptions are over-processed: the same variation is added everywhere, even where the input is nearly clean.
+- **Idea.** (1) Inject noise **only in the decoder blocks**. The encoder and bottleneck, which analyse the corruption, stay noise-free, and the skip connections carry clean features. The noise can then only change how detail is synthesised, not what is detected. (2) Multiply the noise by a **learned per-pixel gate** (sigmoid of a 1×1 convolution of the block's features). The network can put variation where the true image is uncertain (texture, edges under heavy noise) and switch it off where it is not (flat areas, near-clean inputs). The diversity constraint still applies to the average, so the model must keep varying somewhere.
+- **Sources.**
+  - Karras et al., StyleGAN, CVPR 2019 ([paper](https://papers.baulab.info/papers/also/Karras-2019.pdf)): per-layer noise in the *synthesis* network only, scaled per feature map, to produce stochastic detail (hair, pores) without changing structure.
+  - Kendall & Gal, "What Uncertainties Do We Need in Bayesian Deep Learning for Computer Vision?", NeurIPS 2017 ([arXiv 1703.04977](https://arxiv.org/abs/1703.04977)): the uncertainty in vision outputs is heteroscedastic, i.e. it depends on the input, high in some regions and low in others. A good sampler's variance should follow it, not be uniform.
+  - Bendel et al., rcGAN, NeurIPS 2023 (Option H): control the *amount* of variance; Option L controls *where* it goes.
+  - A September 2026 preprint "Spatially Adaptive Noise Injection" ([arXiv 2609.18466](https://arxiv.org/abs/2609.18466)) appeared in search; not read, cite only after checking.
+- **FLOPs.** One 1×1 convolution (C → 1) per decoder block: ~0.01 GFLOPs in total (4.98 → ~4.99). Training cost unchanged.
+- **Risk.** The gate could close everywhere except a few pixels and meet the diversity target with localised blotches. Check the gate maps and sample differences visually; diversity is measured per image as before.
+
+### Option M. Hyperparameter tuning (decided 2026-10-16)
+
+- **Plan:** Optuna (TPE + successive-halving pruning) on 10-18 with 10k-step trials over 8 hyperparameters (learning rate, discriminator learning-rate ratio, adversarial weight, diversity target and weight, SSIM weight, frequency-loss weights, block layout at equal FLOPs). The best two are confirmed at 30k, and the winner is trained 200k on 10-19. Details: `HYPERPARAMETER_TUNING.md`.
+- **Not tuned:** width (FLOPs), dropout (hurts pixel-exact restoration; NAFNet uses none), batch size, optimiser, EMA, DISTS schedule, data pipeline.
+- **Free tuning:** test-time noise scale (0.5–1.0) at final evaluation.
+
+### Option N. Corruption list v3 (round 7)
+
+- Four new families aimed at the private set's domains: `demosaic_artifacts` and `chroma_noise` (low-light / camera), `mri_ghosting` (MRI), `ct_ring_artifact` (CT). Plus a higher share of clean inputs (8% → 12%) against over-processing of mild corruptions. Rationale and settings: `PLAN.md` §3.
+- Sources: our round-3 finding (coverage +3–8 dB per added family); GenDeg-style broad degradation coverage (review PDF §4.6); the brief's "held-out set may contain other types".
 
 ### Not worth exploring, with reasons
 

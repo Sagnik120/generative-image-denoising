@@ -12,4 +12,26 @@ Round 6. Plan: `../PLAN.md` §5.
 **Data and schedule:** as a27.
 
 ## Results
-Pending. Fill in from `results/a28_gan_wave_2stage/metrics/`. Preferred over a27 if ≥ 0.2 dB better with diversity ≥ 0.5.
+Benchmark v1, 60k steps, single seed. Run time 6.4 h (incl. evaluation; phase 1 has no discriminator).
+
+| Noise scale | PSNR | SSIM | DISTS | GFLOPs | Diversity |
+|---|---|---|---|---|---|
+| ×0.5 | 31.451 | 0.8524 | 0.1580 | 4.98 | 0.74 |
+| **×1 (as trained)** | **31.154** | **0.8511** | **0.1582** | 4.98 | **1.28** |
+| ×1.5 | 30.892 | 0.8493 | 0.1598 | 4.98 | 1.71 |
+| a27 (adversarial from step 0) | 31.237 | 0.8489 | 0.1601 | 4.98 | 1.10 |
+
+| Group | single | extra | pair | triple | unseen | natural | lowlight | medical | unseen_v2 | plan (v2) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| PSNR | 33.65 | 33.16 | 29.86 | 28.84 | 30.82 | 28.01 | 35.70 | 32.90 | 30.17 | 34.87 |
+| vs a27 | −0.20 | −0.04 | −0.06 | +0.05 | −0.07 | +0.08 | **−0.48** | −0.01 | −0.28 | −0.56 |
+
+Phase 1 (epochs 1–12, no adversarial term): 30.95 dB at epoch 12 (a27: 30.93; a20: 31.65). Phase 2: +0.20 dB over the last 12 epochs (a27: +0.31). Noise strength 0.006; `train_spread255` 1.86 → 1.64.
+
+## Analysis
+- **The two-phase schedule did not help:** −0.08 dB vs a27 at ×1, +0.06 at ×0.5; +0.002 SSIM, −0.002 DISTS. A tie on v1, below the ≥ 0.2 dB rule.
+- **It is worse where it matters for the private set:** low-light −0.48 dB, `unseen_v2` −0.28. Starting the adversarial term late gave it less time to shape the low-light and unseen behaviour.
+- **Most useful as an experiment:** its phase 1 isolates the cost of forced diversity without any adversarial term (−0.7 dB vs a20 at epoch 12). The adversarial term is not what costs PSNR; it even helps DISTS.
+- Still clearly generative (diversity 1.28; 0.74 at ×0.5) despite the delayed adversarial term.
+
+**Verdict: not taken forward. a27's simpler schedule is kept (adversarial from step 0, better low-light and unseen results).**

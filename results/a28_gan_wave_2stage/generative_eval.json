@@ -1,0 +1,35 @@
+{
+  "architecture": "a28_gan_wave_2stage",
+  "checkpoint": "/DATA1/shrusti/genai_project/results/a28_gan_wave_2stage/checkpoints/best_model.pt",
+  "seeds": 8,
+  "results": [
+    {
+      "steps": 1,
+      "noise_scale": 1.0,
+      "psnr": 31.154342929011523,
+      "ssim": 0.8511255672372746,
+      "dists": 0.15821383155957616,
+      "diversity": 1.2840746839841206,
+      "gflops": 4.97750016
+    },
+    {
+      "steps": 1,
+      "noise_scale": 0.5,
+      "psnr": 31.450819377894714,
+      "ssim": 0.8524327744445047,
+      "dists": 0.15799636250794535,
+      "diversity": 0.7367287278175354,
+      "gflops": 4.97750016
+    },
+    {
+      "steps": 1,
+      "noise_scale": 1.5,
+      "psnr": 30.891527338523854,
+      "ssim": 0.8493067244734285,
+      "dists": 0.15980875793129506,
+      "diversity": 1.71005775531133,
+      "gflops": 4.97750016
+    }
+  ],
+  "mean_noise_strength": 0.0059412379519522395
+}

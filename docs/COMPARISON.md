@@ -1,4 +1,6 @@
-# Model comparison (a05–a26)
+# Model comparison (a05–a28)
+
+> **Update 2026-10-16:** round 6 done. **a25_full (generative, 200k) is the best compliant model: 32.02 / 0.8576 / 0.1399 at noise ×0.5, diversity 1.04**: equal to the regression a15 on PSNR, better on DISTS, −1.1 dB vs a19. See §11.
 
 > **Update 2026-10-15:** round 5 (a24–a26) gives the first eligible generative models (diversity 1.5–1.8), at ~1 dB below their round-4 counterparts; best eligible is a25 (30.93 / 0.8372 / 0.1674). See §10.
 
@@ -279,3 +281,44 @@ Neutral on the training families, consistently +0.23 dB on never-seen families. 
 3. **Keep the wavelet discriminator** for the final model (+0.23 dB unseen, twice).
 4. **Diffusion is closed** at ≤ 5 GFLOPs (a22, a23, a26 all behind the GAN; more steps always worse).
 5. **Training length is still untested for generative models**; for regression it was worth +1.08 dB (a15 → a19).
+
+## 11. Round 6: long run and the full per-sample loss (a25_full, a27, a28)
+
+Source: `run_round6.log`, `results/comparison_round6/`, `results/<model>/`.
+
+### 11.1 Overall
+
+| Model | Steps | PSNR ×1 / ×0.5 | SSIM (×1) | DISTS (×1) | Diversity ×1 / ×0.5 | unseen_v2 | Avg rank (of 25) |
+|---|---|---|---|---|---|---|---|
+| a19 (regression ref.) | 200k | 33.112 | 0.8743 | 0.1293 | 0 | 31.88 | 1st |
+| **a25_full** | 200k | **32.005 / 32.024** | **0.8566** | **0.1410** | 1.34 / 1.04 | **31.30** | **3rd** |
+| a15 (regression ref.) | 60k | 32.034 | 0.8594 | 0.1537 | 0 | 30.99 | 4th |
+| a20 (round 4, noise ignored) | 60k | 31.886 | 0.8554 | 0.1534 | 0.07 | 30.48 | 6th |
+| a27_gan_wave_varctl | 60k | 31.237 / 31.391 | 0.8489 | 0.1601 | 1.10 / 0.64 | 30.45 | 17th |
+| a28_gan_wave_2stage | 60k | 31.154 / 31.451 | 0.8511 | 0.1582 | 1.28 / 0.74 | 30.17 | 15th |
+| a25 (round 5) | 60k | 30.934 / 30.921 | 0.8372 | 0.1674 | 1.54 / 1.13 | 29.91 | 21st |
+
+### 11.2 What each comparison isolates
+
+| Comparison | Isolates | Result |
+|---|---|---|
+| a25_full − a25 | 200k vs 60k steps | +1.07 dB, +0.019 SSIM, −0.026 DISTS (regression: +1.08 dB) |
+| a25_full − a19 | generative vs regression at 200k | −1.11 dB, −0.018 SSIM, +0.012 DISTS |
+| a27 − a25 | full per-sample loss, 16 images, adv 0.005, target 1.5 | +0.30 dB (×1), +0.47 (×0.5), −0.007 DISTS |
+| a28 − a27 | adversarial from 50% instead of 0 | −0.08 dB; low-light −0.48, `unseen_v2` −0.28 |
+| a28 phase 1 (epoch 12) − a20 (epoch 12) | forced diversity, no adversarial vs adversarial, no diversity | **−0.70 dB** |
+| a27 (epoch 12) − a28 (epoch 12) | adversarial term on vs off, same diversity | +0.02 dB (none) |
+
+### 11.3 Where the generative models lack (a25_full vs a19; a27 vs a20)
+
+1. **Structured / exact-inverse corruptions:** `small_artifacts` −4.9, `periodic_noise` −2.4, `salt_pepper` −2.1, `chromatic_aberration` −1.8, blurs −1.1 to −1.5 dB. The same cases lose −1 to −3.8 dB in every model whose noise enters the encoder path (a22, a24–a28) and not in a20 (noise switched off). The injected noise disturbs the features that locate and invert these precise patterns.
+2. **Mild corruptions are over-processed:** `resize_blur` below the input (a25_full 33.78, a27 33.37 vs input 34.24); `jpeg` ≈ input (35.20 vs 35.14; a19 36.43). A fixed amount of variation everywhere costs most where the input is already nearly clean.
+3. **Fine detail under heavy noise is smoothed** (small spots, lettering): shared with the regression models, slightly stronger.
+4. **No adversarial artifacts:** domains lose evenly (natural −1.06, low-light −1.23, medical −1.09 vs a19); DISTS is the axis where the generative model is closest to a19.
+
+### 11.4 Conclusions
+
+1. **a25_full is a strong, compliant submission now** (3rd of 25 overall; generative; 2nd-best DISTS of all models).
+2. **The round-6 recipe is better than round 5's** (+0.47 dB at 60k, best noise scale). Trained 200k it should land at about 32.3–32.5 dB.
+3. **The remaining cost is where the noise enters, not the adversarial term:** forced diversity costs ~0.7 dB with or without an adversarial loss. Next step: put the noise where it can only add stochastic detail (decoder), and let the network choose per pixel how much (round 7, `PLAN.md`).
+4. **The two-phase schedule (a28) brings nothing** and is dropped.

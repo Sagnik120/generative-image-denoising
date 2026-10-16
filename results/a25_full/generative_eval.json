@@ -1,0 +1,35 @@
+{
+  "architecture": "a25_full",
+  "checkpoint": "/DATA1/shrusti/genai_project/results/a25_full/checkpoints/best_model.pt",
+  "seeds": 8,
+  "results": [
+    {
+      "steps": 1,
+      "noise_scale": 1.0,
+      "psnr": 32.0050604693148,
+      "ssim": 0.8565748789497695,
+      "dists": 0.14097633717036007,
+      "diversity": 1.341837724049886,
+      "gflops": 4.97750016
+    },
+    {
+      "steps": 1,
+      "noise_scale": 0.5,
+      "psnr": 32.024188195417736,
+      "ssim": 0.8576436032855662,
+      "dists": 0.13991002843837547,
+      "diversity": 1.0412147839864094,
+      "gflops": 4.97750016
+    },
+    {
+      "steps": 1,
+      "noise_scale": 1.5,
+      "psnr": 31.96949021758925,
+      "ssim": 0.8553519338262466,
+      "dists": 0.14551399512724442,
+      "diversity": 1.459118644396464,
+      "gflops": 4.97750016
+    }
+  ],
+  "mean_noise_strength": 0.05196377096540851
+}
