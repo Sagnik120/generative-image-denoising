@@ -311,6 +311,61 @@ def apply_double_jpeg(img, s, rng):
     return np.ascontiguousarray(np.roll(out, (-dy, -dx), axis=(0, 1)))
 
 
+# ------------------------- v3 training families (round 7) ------------------------- #
+# Artifacts typical of the private set's domains that v2 does not cover.
+
+def apply_demosaic_artifacts(img, s, rng):
+    """Bayer (RGGB) sampling + bilinear demosaicing: colour fringes and zipper
+    edges of camera pipelines; mild sensor noise is added before demosaicing."""
+    h, w = img.shape[:2]
+    raw = np.zeros((h, w), np.float32)
+    raw[0::2, 0::2] = img[0::2, 0::2, 0]
+    raw[0::2, 1::2] = img[0::2, 1::2, 1]
+    raw[1::2, 0::2] = img[1::2, 0::2, 1]
+    raw[1::2, 1::2] = img[1::2, 1::2, 2]
+    raw = raw + rng.normal(0, _lerp(0.0, 0.02, s), raw.shape).astype(np.float32)
+    bayer = (np.clip(raw, 0, 1) * 255.0).round().astype(np.uint8)
+    rgb = cv2.cvtColor(bayer, cv2.COLOR_BayerBG2RGB).astype(np.float32) / 255.0
+    return _clip(rgb)
+
+
+def add_chroma_noise(img, s, rng):
+    """Low-frequency colour blotches of low-light cameras: noise in the colour
+    channels only (luminance kept), blurred to blotches of a few pixels."""
+    amp = _lerp(0.01, 0.06, s)
+    noise = rng.normal(0, 1, img.shape[:2] + (2,)).astype(np.float32)
+    noise = cv2.GaussianBlur(noise, (0, 0), rng.uniform(2.0, 4.0))
+    noise = amp * noise / max(float(noise.std()), 1e-6)
+    cb, cr = noise[..., 0], noise[..., 1]
+    # zero-luminance colour offsets (BT.601 weights)
+    d = np.stack([1.402 * cr, -0.344 * cb - 0.714 * cr, 1.772 * cb], axis=-1)
+    return _clip(img + d)
+
+
+def add_mri_ghosting(img, s, rng):
+    """Phase-encode motion ghosts: faint shifted replicas along one axis."""
+    axis = int(rng.integers(0, 2))
+    out = img.copy()
+    for _ in range(int(rng.integers(1, 4))):
+        shift = int(rng.integers(8, 41)) * (1 if rng.random() < 0.5 else -1)
+        out = out + _lerp(0.05, 0.25, s) * rng.uniform(0.5, 1.0) * (np.roll(img, shift, axis=axis) - img)
+    return _clip(out)
+
+
+def add_ct_ring_artifact(img, s, rng):
+    """CT detector-miscalibration rings: concentric rings around a random centre."""
+    h, w = img.shape[:2]
+    cy, cx = rng.uniform(0.3, 0.7) * h, rng.uniform(0.3, 0.7) * w
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    r = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+    spacing = rng.uniform(3.0, 10.0)
+    n_rings = int(np.ceil(r.max() / spacing)) + 1
+    ring_amp = rng.normal(0, 1, n_rings).astype(np.float32) * (rng.random(n_rings) < 0.5)
+    rings = ring_amp[np.minimum((r / spacing).astype(int), n_rings - 1)]
+    rings = cv2.GaussianBlur(rings, (0, 0), 0.7)
+    return _clip(img + _lerp(0.01, 0.06, s) * rings[..., None])
+
+
 # ------------------------- unseen families for benchmark v2 ------------------------- #
 
 def add_film_grain(img, s, rng):
@@ -378,6 +433,11 @@ FAMILIES = {
     "film_grain":           (add_film_grain,             "noise", 3),
     "line_dropout":         (add_line_dropout,           "impulse", 4),
     "double_jpeg":          (apply_double_jpeg,          "compression", 6),
+    # round 7 (v3)
+    "demosaic_artifacts":   (apply_demosaic_artifacts,   "sensor", 2),
+    "chroma_noise":         (add_chroma_noise,           "noise", 3),
+    "mri_ghosting":         (add_mri_ghosting,           "artifact", 4),
+    "ct_ring_artifact":     (add_ct_ring_artifact,       "artifact", 4),
 }
 
 LISTED_FAMILIES = ["gaussian_noise", "poisson_noise", "salt_pepper", "speckle_noise",
@@ -394,7 +454,12 @@ NUM_TRAIN_FAMILIES = len(TRAIN_FAMILIES)
 # them are v1's unseen families, so v2 models are tested on a new unseen set.
 PLAN_FAMILIES = ["pixelate", "periodic_noise", "sensor_noise", "ringing", "double_jpeg"]
 UNSEEN_V2_FAMILIES = ["film_grain", "glass_blur", "line_dropout"]
-EXTRA_FAMILY_SETS = {"v1": EXTRA_FAMILIES, "v2": EXTRA_FAMILIES + PLAN_FAMILIES}
+# Round 7: "v3" adds artifacts of the private set's domains (camera, MRI, CT).
+# The v2 unseen families stay out of training, so `unseen_v2` remains a test
+# of generalisation.
+V3_FAMILIES = ["demosaic_artifacts", "chroma_noise", "mri_ghosting", "ct_ring_artifact"]
+EXTRA_FAMILY_SETS = {"v1": EXTRA_FAMILIES, "v2": EXTRA_FAMILIES + PLAN_FAMILIES,
+                     "v3": EXTRA_FAMILIES + PLAN_FAMILIES + V3_FAMILIES}
 
 # At most this many families from one group in a single chain (two different
 # blurs or two codecs stacked just destroy the image without teaching anything).
@@ -424,8 +489,8 @@ class RandomDegradation:
     listed_weight: share of draws taken from the brief's nine families; the
                    rest come from EXTRA_FAMILIES.
     shuffle_prob:  fraction of chains applied in random instead of physical order.
-    families:      "v1" (LISTED + EXTRA, the round-2 pipeline) or "v2" (also
-                   PLAN_FAMILIES).
+    families:      "v1" (LISTED + EXTRA, the round-2 pipeline), "v2" (also
+                   PLAN_FAMILIES) or "v3" (also V3_FAMILIES, round 7).
     severity_beta: (a, b) of the Beta distribution severities are drawn from;
                    a larger b gives milder corruptions.
     """
@@ -505,4 +570,10 @@ BENCHMARK_CASES_V2 = (
     + [("+".join(f), "unseen_v2", list(f)) for f in (
         ("glass_blur", "film_grain"), ("line_dropout", "jpeg"))]
     + [(name, "plan", [name]) for name in ("sensor_noise", "ringing", "double_jpeg")]
+)
+
+# Round 7: check set for the v3 families (trained on only by v3 models).
+BENCHMARK_CASES_V3 = (
+    [(name, "v3", [name]) for name in V3_FAMILIES]
+    + [(name + "+gaussian_noise", "v3", [name, "gaussian_noise"]) for name in V3_FAMILIES]
 )

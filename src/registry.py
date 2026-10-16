@@ -58,6 +58,9 @@ ARCHITECTURES = {
     "a25_full": "src.architectures.a25_full.model",
     "a27_gan_wave_varctl": "src.architectures.a27_gan_wave_varctl.model",
     "a28_gan_wave_2stage": "src.architectures.a28_gan_wave_2stage.model",
+    # ---- round 7: final long runs on data v3 ----
+    "a27_full": "src.architectures.a27_full.model",
+    "a29_gan_decnoise": "src.architectures.a29_gan_decnoise.model",
 }
 
 # Architectures are numbered in the order they were added. Round 1 (a01-a04)

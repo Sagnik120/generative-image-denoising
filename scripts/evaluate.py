@@ -110,6 +110,12 @@ def main():
                                                 batch_size=val_loader.batch_size, shuffle=False,
                                                 num_workers=val_loader.num_workers)
         eval_results["benchmark_v2"] = run_full_evaluation(bundle, v2_loader, device)["benchmark"]
+    # Round 7: v3 check set (new v3 families) when it has been built.
+    if (benchmark_dir(args.data_root, "v3") / "meta.json").exists():
+        v3_loader = torch.utils.data.DataLoader(BenchmarkDataset(args.data_root, "v3"),
+                                                batch_size=val_loader.batch_size, shuffle=False,
+                                                num_workers=val_loader.num_workers)
+        eval_results["benchmark_v3"] = run_full_evaluation(bundle, v3_loader, device)["benchmark"]
     flop_info = compute_flops_and_params(bundle.get_inference_model(),
                                           input_size=(1, 3, 256, 256), device=device)
     # a04's counter sees one diffusion step; its real cost is `timesteps` passes.
@@ -125,12 +131,12 @@ def main():
     }
     save_json(summary, results_dir / "metrics" / "final_evaluation_summary.json")
     write_breakdown_csv(summary["benchmark"], results_dir / "metrics" / "benchmark_breakdown.csv")
-    if "benchmark_v2" in summary:
-        write_breakdown_csv(summary["benchmark_v2"],
-                            results_dir / "metrics" / "benchmark_v2_breakdown.csv")
+    for key in ("benchmark_v2", "benchmark_v3"):
+        if key in summary:
+            write_breakdown_csv(summary[key], results_dir / "metrics" / f"{key}_breakdown.csv")
     print("[evaluate.py] Final evaluation summary:")
     for k, v in summary.items():
-        if k not in ("benchmark", "benchmark_v2"):
+        if k not in ("benchmark", "benchmark_v2", "benchmark_v3"):
             print(f"    {k}: {v}")
     for level in ("by_group", "by_domain"):
         print(f"    {level[3:]:7s} " + "  ".join(

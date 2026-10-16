@@ -12,7 +12,14 @@ are shared here:
                    randomness to use. `scale` multiplies the noise at test
                    time only (noise-scale sweep; not saved with the weights).
   GenNet         - the a05/a15 NAF U-Net with a NoiseInjection after every
-                   block; the generator of the GAN models.
+                   block (or, round 7, only after the decoder blocks); the
+                   generator of the GAN models.
+
+Round 7 (a29): `gate=True` multiplies the noise by a learned per-pixel gate,
+sigmoid(1x1 conv of the block's features), so the network can add variation
+where the image is uncertain and none where it is not. `noise_where="decoder"`
+keeps the encoder and bottleneck noise-free, so the skip connections carry
+clean features (StyleGAN puts noise only in the synthesis path).
 
 Seeded noise: while training, noise is drawn fresh each call. In eval mode
 each noise source uses a fixed buffer generated from a seed, so inference is
@@ -28,9 +35,14 @@ from .unet import RestorationUNet
 
 
 class NoiseInjection(nn.Module):
-    def __init__(self, channels, res, index=0, init=0.0):
+    def __init__(self, channels, res, index=0, init=0.0, gate=False):
         super().__init__()
         self.weight = nn.Parameter(torch.full((1, channels, 1, 1), float(init)))
+        self.gate = None
+        if gate:                     # per-pixel gate; bias 0 and small weights -> ~0.5 at start
+            self.gate = nn.Conv2d(channels, 1, kernel_size=1)
+            nn.init.normal_(self.gate.weight, std=1e-3)
+            nn.init.zeros_(self.gate.bias)
         self.scale = 1.0
         self.fresh = False           # True: new noise every call in eval mode too (submission)
         self.index = index
@@ -48,6 +60,8 @@ class NoiseInjection(nn.Module):
             noise = torch.randn(b, 1, h, w, device=x.device, dtype=x.dtype)
         else:
             noise = self.eval_noise.to(x.dtype)
+        if self.gate is not None:
+            noise = noise * torch.sigmoid(self.gate(x))
         return x + (self.weight * self.scale) * noise
 
 
@@ -81,16 +95,20 @@ class GenNet(nn.Module):
     """NAF U-Net generator: corrupted image + injected noise -> restored image."""
 
     def __init__(self, width=24, enc_blocks=(2, 2, 2, 4), middle_blocks=3,
-                 dec_blocks=(1, 1, 1, 2), noise=True, image_size=256, noise_init=0.0):
+                 dec_blocks=(1, 1, 1, 2), noise=True, image_size=256, noise_init=0.0,
+                 noise_where="all", noise_gate=False):
         super().__init__()
         widths = [width * 2 ** i for i in range(len(enc_blocks) + 1)]
         counter = [0]
+        # RestorationUNet builds encoder, middle, then decoder blocks in order.
+        first_decoder = sum(enc_blocks) + middle_blocks + 1
 
         def block(level, ch):
-            if not noise:
-                return NAFBlock(ch)
             counter[0] += 1
-            return nn.Sequential(NAFBlock(ch), NoiseInjection(ch, image_size >> level, counter[0], noise_init))
+            if not noise or (noise_where == "decoder" and counter[0] < first_decoder):
+                return NAFBlock(ch)
+            return nn.Sequential(NAFBlock(ch), NoiseInjection(ch, image_size >> level, counter[0],
+                                                              noise_init, gate=noise_gate))
 
         self.net = RestorationUNet(block, in_ch=3, out_ch=3, widths=widths,
                                    enc_blocks=enc_blocks, middle_blocks=middle_blocks,
@@ -107,4 +125,6 @@ def build_generator(model_cfg):
                   middle_blocks=m.get("middle_blocks", 3),
                   dec_blocks=tuple(m.get("dec_blocks", [1, 1, 1, 2])),
                   noise=m.get("noise", True),
-                  noise_init=m.get("noise_init", 0.0))
+                  noise_init=m.get("noise_init", 0.0),
+                  noise_where=m.get("noise_where", "all"),
+                  noise_gate=m.get("noise_gate", False))

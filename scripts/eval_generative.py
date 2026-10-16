@@ -43,7 +43,7 @@ def parse_args():
     p.add_argument("--checkpoint", default=None)
     p.add_argument("--steps", nargs="*", type=int, default=None,
                    help="Sampling step counts to evaluate (diffusion samplers only).")
-    p.add_argument("--noise_scales", nargs="*", type=float, default=[0.5, 1.0, 1.5],
+    p.add_argument("--noise_scales", nargs="*", type=float, default=[0.5, 0.6, 0.75, 1.0, 1.5],
                    help="Test-time noise multipliers evaluated at the model's own step count.")
     p.add_argument("--seeds", type=int, default=8, help="Noise seeds for the diversity measurement.")
     p.add_argument("--diversity_images", type=int, default=96)
