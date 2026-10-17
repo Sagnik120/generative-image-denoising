@@ -96,6 +96,7 @@ class GANBundle(RestorationBundle):
         self.r1_gamma = g.get("r1_gamma", 1.0)
         self.r1_every = g.get("r1_every", 16)
         self.adv_start = int(g.get("adv_start_frac", 0.0) * self.total_steps)
+        self.disc_lr_ratio = g.get("disc_lr_ratio", 1.0)   # TTUR: discriminator lr = ratio x generator lr
         self.disc_input = g.get("disc_input", "rgb")
         self.wavelet_weight = t.get("wavelet_weight", 0.0)
         st = dict(t.get("stochastic") or {})
@@ -147,9 +148,10 @@ class GANBundle(RestorationBundle):
         self.model.train()
         self.disc.train()
         lr = self._lr_at(self.step)
-        for opt in (self.optimizer, self.opt_d):
-            for group in opt.param_groups:
-                group["lr"] = lr
+        for group in self.optimizer.param_groups:
+            group["lr"] = lr
+        for group in self.opt_d.param_groups:
+            group["lr"] = lr * self.disc_lr_ratio
         target, n_img = clean, corrupted.shape[0]
         k = min(self.pair_images, n_img)
         if k > 0:            # round 6: second noise draw for the first k images only

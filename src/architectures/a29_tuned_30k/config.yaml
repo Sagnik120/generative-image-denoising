@@ -1,0 +1,60 @@
+# Config for a29_tuned_30k. Round 8 (phase B: best Optuna setting at 30k steps. PLACEHOLDER = a29 setting until scripts/tune_optuna.py --write_configs overwrites it); see docs/HYPERPARAMETER_TUNING.md.
+architecture: a29_tuned_30k
+
+model:
+  width: 24
+  enc_blocks: [2, 2, 2, 4]       # NAFBlocks per encoder level, 256px -> 32px
+  middle_blocks: 3               # at 16px
+  dec_blocks: [1, 1, 1, 2]
+  noise: true                    # noise injection after every block
+  noise_init: 0.01               # starting noise strength (round 4: 0)
+  noise_where: decoder           # noise only after the 5 decoder blocks (a27: all 18 blocks)
+  noise_gate: true               # per-pixel gate: sigmoid(1x1 conv of the block features)
+
+data:
+  patch_size: 256
+  batch_size: 16                 # images per step; + pair_images extra draws = 20 outputs
+  val_batch_size: 16
+  num_workers: 8
+  steps_per_epoch: 2500          # an "epoch" is this many steps; validation runs after each
+  degradation:                   # the "v2" pipeline (src/common/degradations.py), as a15/a19
+    families: v3                 # v2 + demosaic, chroma noise, MRI ghosting, CT rings (round 7)
+    num_ops_probs: [0.12, 0.30, 0.36, 0.17, 0.05]   # 12% clean inputs (v2: 8%)
+    shuffle_prob: 0.5
+    severity_beta: [1.0, 1.8]
+    listed_weight: 0.65
+
+train:
+  epochs: 12                     # x 2500 steps = 30,000 steps
+  lr: 0.0004
+  lr_min: 0.000001
+  warmup_steps: 1000
+  weight_decay: 0.0001
+  amp: true
+  ema_decay: 0.999
+  grad_clip: 1.0
+  wavelet_weight: 0.05            # L1 on Haar sub-bands (0 = off)
+  gan:
+    disc_input: wavelet             # rgb | wavelet (high-frequency Haar bands)
+    disc_feat: 32
+    adv_weight: 0.005              # hinge adversarial weight, ramped in over ramp_steps (a20/a21 value)
+    ramp_steps: 5000
+    adv_start_frac: 0.0            # adversarial from step 0
+    disc_lr_ratio: 1.0             # discriminator lr / generator lr (TTUR); tuned
+    r1_gamma: 1.0                  # R1 penalty on the discriminator (0 = off)
+    r1_every: 16
+  stochastic:                    # round-6 recipe (src/common/gan.py docstring)
+    pair_images: 4               # second noise draw for 4 of the 16 images
+    div_target: 1.5              # grey levels (of 255) of mean |x1 - x2| on the pairs
+    div_weight: 4.0              # high: the full per-sample loss pushes variance down, the hinge must win
+  loss:                          # composite loss on the clean-image output
+    charbonnier: 1.0
+    fft: 0.05
+    ssim: 0.2
+    dists: 0.1
+    dists_start_frac: 0.5
+    dists_batch: 4
+  visualize_every: 4
+  checkpoint_every: 1
+  log_every: 250
+  seed: 42

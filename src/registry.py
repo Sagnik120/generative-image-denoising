@@ -61,6 +61,10 @@ ARCHITECTURES = {
     # ---- round 7: final long runs on data v3 ----
     "a27_full": "src.architectures.a27_full.model",
     "a29_gan_decnoise": "src.architectures.a29_gan_decnoise.model",
+    # ---- round 8: hyperparameter tuning of a29 (configs written by scripts/tune_optuna.py) ----
+    "a29_base_30k": "src.architectures.a29_base_30k.model",
+    "a29_tuned_30k": "src.architectures.a29_tuned_30k.model",
+    "a29_tuned": "src.architectures.a29_tuned.model",
 }
 
 # Architectures are numbered in the order they were added. Round 1 (a01-a04)
