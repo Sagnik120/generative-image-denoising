@@ -2,7 +2,7 @@
 
 Written 2026-10-16, after round 6 (a25_full, a27, a28). Replaces the round-6 plan. Background: `COMPARISON.md` §11 (round-6 numbers), `PROJECT_REVIEW_AND_OPTIONS.md` (Options L and M are new), `CURRENT_STATUS.md`.
 
-**Status: approved 2026-10-17; code implemented (`WALKTHROUGH.md`). Both a27_full and a29_full train on data v3.**
+**Status 2026-10-18: round 7 done. Final architecture: a29_gan_decnoise (32.27 / 0.8682 / 0.1360 at noise ×0.5, diversity 0.86; `COMPARISON.md` §12). a27_full not chosen: unstable late in training. Now: hyperparameter tuning of a29 (§6, `HYPERPARAMETER_TUNING.md`); code for it after approval.**
 
 Hardware: two RTX A5000 (24 GB). Timeline (agreed 10-16, shifted 10-17): **10-17/18** two 200k runs (architecture decision 10-18 morning); **10-18/19** hyperparameter tuning with Optuna (`HYPERPARAMETER_TUNING.md`); **10-19/20** final 200k run with the tuned setting; **10-20** evaluation, export, documentation, submission by 23:59.
 
@@ -130,34 +130,32 @@ a25_full (done). If both new runs fail, it is the submission at noise ×0.5.
 
 ---
 
-## 6. Schedule, time and memory (two 24 GB GPUs)
+## 6. Schedule, time and memory (two 24 GB GPUs) — revised 2026-10-18
 
-Measured: a25_full 20.4 h for 200k incl. evaluation (16 outputs per step); a27 6.9 h for 60k (20 outputs). a27_full / a29_full: 6.4 h × 200/60 ≈ 21.5 h training + ~0.7 h evaluation (four noise scales + v3 check set). Memory was not logged; it is about a25's (~12–14 GB) plus 25% more outputs: **~14–17 GB**, checked in the dry run (`gpu_mem` in the step lines). The new degradations run on the CPU data workers.
+Round 7 ran 25.3 h for 200k steps: the machine has been ~22% slower since 10-17 (~1220 s per 2.5k steps; round 6: ~940 s). All times below assume that speed.
 
 | Run | GPU | Steps | Time | Peak memory (of 24 GB) |
 |---|---|---|---|---|
-| a27_full | 0 | 200k | ~22 h | ~14–17 GB |
-| a29_full | 1 | 200k | ~22.5 h | ~14–17 GB |
-| Optuna trials (10k steps each) | 0 + 1 | – | ~1.1 h each, fewer with pruning | ~14–17 GB |
-| Final tuned run | 0 | 200k | ~22 h | ~14–17 GB |
+| Optuna trial (a29, 10k steps) | 0 + 1 | 10k | ~1.45 h complete; ~0.4–0.8 h if pruned | ~14–17 GB |
+| Phase B: best setting and a29 baseline | 0 + 1 | 30k each | ~4.3 h | ~14–17 GB |
+| Tuned final run (`a29_tuned`) | 0 | 200k (80 epochs) | ~27 h (~21 h at normal speed) | ~14–17 GB |
 
 | Day | GPU 0 | GPU 1 | Other |
 |---|---|---|---|
-| 10-17 | build v3 check set (~2 min), dry run (~15 min); **a27_full starts ~midday** | **a29_full starts ~midday** | write the Optuna script and subset benchmark on CPU while they train |
-| 10-18 | a27_full done (~10:00) → evaluation | a29_full done (~10:30) → evaluation | choose the architecture (§5) by ~11:00; **Optuna phase A ~11:30 → 10-19 ~05:00** |
-| 10-19 | phase B (top-1 at 30k, then baseline at 30k) ~05:00 → ~12:00; **final 200k run with the tuned setting ~12:30 → 10-20 ~10:30** | phase B (top-2 at 30k); then noise-scale evaluation, export rehearsal, CPU test of the 10-18 model | report draft |
-| 10-20 | evaluate the tuned run (~11:00); final choice (§5: it must beat the 10-18 model) | – | export, fvcore + ptflops, CPU test, diversity samples; report; **submit by 23:59** |
+| 10-18 | pull, dry run (~15 min); **phase A (`scripts/tune_optuna.py`, 2 workers, cap 40 trials of 4 epochs) →** | **phase A ~12:00 →** | docs (done) |
+| 10-19 | phase A until ~02:00; **phase B** best setting at 30k (~02:00–06:30); **tuned run `a29_tuned`, 80 epochs, ~07:00 →** | phase B a29 baseline at 30k; then a29 noise grid 0.4/0.5/0.6, export rehearsal, CPU test | report draft |
+| 10-20 | tuned run ends ~04:00–10:30 → evaluation | – | final choice (§5); export (fresh noise per call), fvcore + ptflops, CPU test, diversity samples; report; **submit by 23:59** |
 
-The plan was shifted by half a day because the runs start on 10-17 instead of 10-16 evening. The tuned 200k run ends ~13 h before the deadline. If phase B ends late, the tuned run is skipped and the 10-18 model is final.
+What is tuned: learning rate, discriminator/generator learning-rate ratio, adversarial weight, diversity target, SSIM weight (5 dimensions). Not tuned: width, block layout, dropout, batch, optimiser, frequency-loss weights, data, etc. Reasons and rules: `HYPERPARAMETER_TUNING.md`.
 
-Fallbacks: a25_full (already trained); the 10-18 winner if the tuned run is late or not better.
+Fallbacks: **a29 as trained** (current final), then a25_full. The tuned model replaces a29 only if it is better at its best eligible noise scale.
 
 ---
 
-## 7. Code (implemented 2026-10-17; Optuna script follows during the runs)
+## 7. Code (round 7 implemented 2026-10-17; round 8 tuning code implemented 2026-10-18)
 
 - `gennet.py`: `NoiseInjection` option `gate: true` (1×1 conv C → 1 + sigmoid, bias 0); `GenNet` option `noise_where: all | decoder` (inject only in decoder blocks).
 - Configs: `a27_full` (a27 config, 80 epochs), `a29_gan_decnoise` (a27_full + `noise_where: decoder`, `noise_gate: true`); registry; architecture docs.
 - `eval_generative.py`: default noise scales 0.5 0.6 0.75 1.0 1.5 (argument already exists).
 - `degradations.py`: 4 new families and the `v3` family set; 0-corruption probability in the configs (12%); v3 check set in the benchmark builder.
-- Later (10-17, separate step): `scripts/tune_optuna.py` and the subset benchmark (`HYPERPARAMETER_TUNING.md`).
+- Round 8 (done): `scripts/tune_optuna.py` (Optuna TPE + successive halving, 2 workers, SQLite study, 132-image subset at noise ×0.5); `gan.disc_lr_ratio` in `gan.py`; configs `a29_base_30k` (phase-B baseline), `a29_tuned_30k`, `a29_tuned` (written from the best trial by `--write_configs`); `optuna` in `requirements.txt`.

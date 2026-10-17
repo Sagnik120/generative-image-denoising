@@ -75,9 +75,21 @@ Round-6 conclusion: long training works for the generative model (+1.07 dB). The
 
 ## Round 7 (a27_full, a29): final long runs on data v3
 
-200k steps, from scratch, data v3 (v2 + `demosaic_artifacts`, `chroma_noise`, `mri_ghosting`, `ct_ring_artifact`; 12% clean inputs). Recipe of a27 (full per-sample loss + diversity constraint 1.5, wavelet discriminator, adversarial 0.005). Evaluated also on the v3 check set (96 images) and at noise ×0.5 / 0.6 / 0.75 / 1 / 1.5. Results pending.
+200k steps, from scratch, data v3 (v2 + `demosaic_artifacts`, `chroma_noise`, `mri_ghosting`, `ct_ring_artifact`; 12% clean inputs). Recipe of a27 (full per-sample loss + diversity constraint 1.5, wavelet discriminator, adversarial 0.005). Evaluated also on the v3 check set (96 images) and at noise ×0.5 / 0.6 / 0.75 / 1 / 1.5.
 
-| # | File | Model | Noise | GFLOPs |
-|---|---|---|---|---|
-| 27F | [a27_full](a27_full.md) | a27 at 200k | after all 18 NAF blocks, per-channel strength | 4.978 |
-| 29 | [a29_gan_decnoise](a29_gan_decnoise.md) | a27_full with decoder-only, per-pixel gated noise | after the 5 decoder blocks, × learned per-pixel gate | 4.982 |
+| # | File | Model | Best eligible scale | PSNR | SSIM | DISTS | Diversity | GFLOPs | Verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 27F | [a27_full](a27_full.md) | a27 at 200k, noise after all 18 blocks | ×0.6 | 32.184 | 0.8659 | 0.1444 | 0.675 | 4.978 | unstable after epoch ~45 (spread 4.5, −0.8 dB by epoch 80); best checkpoint only |
+| 29 | [a29_gan_decnoise](a29_gan_decnoise.md) | decoder-only, per-pixel gated noise | **×0.5** | **32.269** | **0.8682** | **0.1360** | 0.86 | 4.982 | **final architecture**; stable; best generative model on all three metrics |
+
+Round-7 conclusion: a29 is the final architecture, −0.84 dB from the regression a19 (a25_full: −1.09). Next: hyperparameter tuning of a29 and a tuned 200k run (`../HYPERPARAMETER_TUNING.md`).
+
+## Round 8 (a29_base_30k, a29_tuned_30k, a29_tuned): hyperparameter tuning of a29
+
+Same network, data and losses as a29; only the five tuned values differ (learning rate, discriminator/generator lr ratio, adversarial weight, diversity target, SSIM weight). Configs `a29_tuned_30k` and `a29_tuned` are written from the best Optuna trial by `scripts/tune_optuna.py --write_configs`. Plan: `../HYPERPARAMETER_TUNING.md`. Results pending.
+
+| Config | Purpose | Steps |
+|---|---|---|
+| a29_base_30k | phase-B baseline: unchanged a29 setting | 30k (12 epochs) |
+| a29_tuned_30k | phase B: best Optuna setting | 30k (12 epochs) |
+| a29_tuned | final run with the best setting (if phase B passes) | 200k (80 epochs) |

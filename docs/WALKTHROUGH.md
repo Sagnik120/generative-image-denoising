@@ -1,149 +1,152 @@
-# Walkthrough: round 7 (a27_full, a29 on data v3)
+# Walkthrough: round 8 (hyperparameter tuning of a29)
 
-Written 2026-10-17. What was just added, how to get it onto the GPU machine (two 24 GB RTX A5000), and the commands that run everything. Plan and reasoning: `PLAN.md`. Model details: `architectures/a27_full.md`, `a29_gan_decnoise.md`. Round-6 results: `COMPARISON.md` §11. Tuning plan for 10-18: `HYPERPARAMETER_TUNING.md`.
+Written 2026-10-18. What was just added, how to get it onto the GPU machine (two 24 GB RTX A5000), and the commands for the three steps: Optuna search → 30k confirmation → final 80-epoch run. Plan and rules: `HYPERPARAMETER_TUNING.md`, `PLAN.md` §6. Round-7 results: `COMPARISON.md` §12.
 
 ## 1. What was completed
 
-Two final 200k-step runs, both on the new **data v3**, ready to train:
+**Final architecture:** a29_gan_decnoise (32.27 / 0.8682 / 0.1360 at noise ×0.5, diversity 0.86). Round 8 tunes five of its hyperparameters and retrains it.
 
-- **a27_full**: a27 (round-6 winner) trained 200k steps. Noise after all 18 NAF blocks. 4.978 GFLOPs.
-- **a29_gan_decnoise**: a27_full with **noise only in the 5 decoder blocks**, multiplied by a **learned per-pixel gate**. The encoder and bottleneck are noise-free, so structured corruptions are analysed on clean features, and the model can put variation where the image is uncertain and none on near-clean areas. 4.982 GFLOPs.
+**Is 80 epochs enough?** Checked on a29's own curve:
+- over the last 12 epochs PSNR moved +0.02 dB and DISTS −0.001, and the training loss was flat (~0.049) with the learning rate at ~1e-6;
+- PSNR peaked at epoch 44, and the second half traded a little PSNR for better DISTS.
 
-**Data v3** (both runs):
-- v2's 22 corruption families + **4 new ones** aimed at the private set's domains:
-  - `demosaic_artifacts`: camera colour fringes and zipper edges (low-light / natural).
-  - `chroma_noise`: low-frequency colour blotches (low-light).
-  - `mri_ghosting`: shifted faint replicas (MRI).
-  - `ct_ring_artifact`: concentric rings (CT).
-- 12% clean inputs (v2: 8%), against over-processing of mild corruptions.
-- `glass_blur`, `film_grain`, `line_dropout` stay out of training, so benchmark v2 still measures unseen corruptions.
-- New **v3 check set**: 4 new families alone and with Gaussian noise, 12 images each (96 images). `evaluate.py` scores it automatically when it has been built.
+The schedule reaches its plateau, so 80 epochs is not stopping the model early. A 100-epoch schedule would add at most ~0.05–0.15 dB and would end too close to the deadline.
 
-Unchanged from a27: wavelet-domain discriminator, full composite + wavelet L1 loss on every output, diversity constraint (1.5 grey levels, weight 4.0) on 4 extra draws per batch, adversarial 0.005 from step 0, fresh noise per call in the exported model.
+**Code added:**
+- **`scripts/tune_optuna.py`** (new). Optuna search over a29:
+  - **Search space (5):** learning rate 2e-4–8e-4 (log); discriminator/generator lr ratio {0.5, 1, 2}; adversarial weight 0.0025–0.01 (log); diversity target 1.0–1.8 grey levels; SSIM weight 0.1–0.35.
+  - **Trials:** cap **40 trials in total** (both workers together) or **14 h per worker**. Each trial is **10k steps = 4 epochs** with its own warm-up (500 steps) and cosine schedule; the adversarial ramp is shortened to 1k steps.
+  - **Sampler:** TPE (6 random start-up trials). **Trial 0 = the current a29 setting.**
+  - **Pruner:** successive halving; checks at 2.5k and 5k steps, so weak trials stop after ~20–40 minutes.
+  - **Score:** `J = PSNR + 20·SSIM − 20·DISTS` on a 132-image subset of benchmark v1 (4 per case: 2 natural, 1 low-light, 1 medical), **at noise ×0.5**.
+  - **Fails a trial if:** diversity < 0.6 (16 images × 4 seeds), final sample spread > 3× the diversity target (a27_full's failure), or the losses keep going non-finite.
+  - **Outputs:** an SQLite study shared by the two workers (`results/optuna/a29_tune.db`) and one row per trial in `results/optuna/trials.csv`.
+  - `--summary` prints the top 10 trials. `--write_configs` writes the phase-B and final configs from the best trial.
+- `src/common/gan.py`: `gan.disc_lr_ratio` (discriminator learning rate = ratio × generator learning rate; default 1.0, so every earlier model is unchanged).
+- New configs, all a29's network:
+  - `a29_base_30k`: the a29 setting at 30k steps, the phase-B baseline.
+  - `a29_tuned_30k`: the best setting at 30k steps.
+  - `a29_tuned`: the best setting at 200k steps (80 epochs).
 
-Files added or changed:
-- `src/common/degradations.py`: 4 new families, `V3_FAMILIES`, family set `v3`, `BENCHMARK_CASES_V3`.
-- `src/common/gennet.py`: `noise_where: decoder` and `noise_gate: true` options (old models build exactly as before).
-- `scripts/evaluate.py`: scores the v3 check set (`benchmark_v3` in the summary, `benchmark_v3_breakdown.csv`).
-- `scripts/prepare_data.py`: builds the v3 check set with the other benchmarks.
-- `scripts/eval_generative.py`: default noise scales 0.5, 0.6, 0.75, 1.0, 1.5.
-- `src/architectures/a27_full/`, `a29_gan_decnoise/`: `config.yaml` + `model.py`; `src/registry.py`: two entries.
-- Docs: `PLAN.md`, `HYPERPARAMETER_TUNING.md` (new), `CURRENT_STATUS.md`, `COMPARISON.md` §11, `PROJECT_REVIEW_AND_OPTIONS.md` (Options L–N), `architectures/` (round-6 results; a27_full, a29 new; README).
+  The two `tuned` configs are **placeholders equal to a29 until `--write_configs` overwrites them.**
+- `src/registry.py`: three entries. `requirements.txt`: `optuna`.
+- Docs: `HYPERPARAMETER_TUNING.md`, `PLAN.md`, `CURRENT_STATUS.md`, `COMPARISON.md` §12, `architectures/` (a27_full and a29 results, round-8 table).
 
-Tested on CPU:
-- Each new family at severities 0, 0.5, 1: output shape, range and dtype correct; ~0.2–1.1 ms per image.
-- The v3 sampler draws all 4 new families; labels still work.
-- a29 has 5 noise modules (a27_full 18); FLOPs with fvcore 4.982 / 4.978 GFLOPs.
-- 3 a29 training steps with all losses (DISTS off offline): sample spread ~1.5 from the start, adversarial and discriminator active.
-- Same seed gives identical output, different seed or fresh mode gives a different output.
-- Round-4–6 models keep exactly the same module structure.
+**Tested on CPU with stand-in data:**
+- two complete mini-trials: trial 0 = baseline, trial 1 from TPE;
+- scores reported at the intermediate checkpoints;
+- trial log and summary written;
+- `--write_configs` produced valid configs from the best trial (placeholders restored afterwards);
+- the 10k-step trial schedule checked (4 epochs × 2.5k, warm-up 500, ramp 1k).
 
-**Not tested on a GPU**: mixed precision, DISTS, memory, speed, the v3 check-set build. The steps below cover these.
+**Not tested on a GPU** (speed, memory, real data): the smoke run in §3 covers this.
 
 ## 2. Commit and push (on this machine)
 
-Three commits: round-6 results and analysis, round-7 code, round-7 docs.
-
 ```
-# 1. round-6 results and analysis
-git add results/a25_full results/a27_gan_wave_varctl results/a28_gan_wave_2stage results/comparison_round6
-git add docs/COMPARISON.md docs/PROJECT_REVIEW_AND_OPTIONS.md docs/architectures/a25_full.md docs/architectures/a27_gan_wave_varctl.md docs/architectures/a28_gan_wave_2stage.md
-git commit -m "docs(results): add round 6 (a25_full, a27, a28) results and analysis; options L-N"
+# 1. round-7 results and analysis
+git add results/a27_full results/a29_gan_decnoise results/comparison_round7
+git add docs/COMPARISON.md docs/CURRENT_STATUS.md docs/architectures/a27_full.md docs/architectures/a29_gan_decnoise.md
+git commit -m "docs(results): add round 7 (a27_full, a29) results; a29 chosen as final architecture"
 
-# 2. round-7 code
-git add src scripts
-git commit -m "feat: add data v3 (4 domain-specific families, 12% clean, v3 check set) and round 7 models a27_full, a29 (decoder-only gated noise)"
+# 2. round-8 tuning code
+git add scripts/tune_optuna.py src requirements.txt
+git commit -m "feat: add Optuna tuning of a29 (scripts/tune_optuna.py), disc lr ratio, round 8 configs"
 
-# 3. round-7 plan and docs
+# 3. round-8 docs
 git add docs
-git commit -m "docs: round 7 plan, hyperparameter tuning plan, status, architecture docs and walkthrough"
+git commit -m "docs: hyperparameter tuning plan, round 8 plan and walkthrough"
 
 git status
 git push origin main
 ```
-
-`git status` at the end should show nothing to commit.
 
 ## 3. Run on the GPU machine
 
 ```
 cd <repo on the GPU machine>
 git pull origin main
+pip install "optuna>=3.4"
 ```
 
-**Build the v3 check set once** (~1–2 minutes, no download; uses the same held-out images as benchmarks v1/v2):
+The run log of round 7 shows our GPUs as **0 and 2**; check with `nvidia-smi` and use the free ones below.
+
+**Step 0: smoke test (~5–10 min, separate study, nothing kept).** 2 tiny trials of 60 steps on real data:
 
 ```
-python -c "from src.common.dataset import build_benchmark; from src.common.degradations import BENCHMARK_CASES_V3; build_benchmark('<DATA>', seed=2028, version='v3', cases=BENCHMARK_CASES_V3)"
+CUDA_VISIBLE_DEVICES=0 python scripts/tune_optuna.py --data_root <DATA> --smoke --n_trials 2 --enqueue_baseline --study_name smoke --storage sqlite:///results/optuna/smoke.db
 ```
 
-It should print `building benchmark v3` and end with 96 image pairs in `<DATA>/benchmark/v3/`.
+It must print `step 20` / `step 40` lines with J, PSNR, SSIM, DISTS, diversity for 2 trials, then a summary. Then: `rm results/optuna/smoke.db results/optuna/trials.csv`.
 
-**Dry run** (~15 minutes; 30 training steps per model, then evaluate (now with v3), generative eval and export; prints speed and `gpu_mem`):
-
-```
-python scripts/run_all.py --data_root <DATA> --archs a27_full a29_gan_decnoise --dry_run
-```
-
-Both must say `OK`.
-
-**Real run, one command** (both GPUs, one model each):
+**Step 1: Optuna search (phase A, ~14 h), two workers on one study.** Start worker 1 a minute after worker 0 (worker 0 queues the baseline as trial 0):
 
 ```
-nohup python scripts/run_all.py --data_root <DATA> --archs a27_full a29_gan_decnoise > run_round7.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0 nohup python scripts/tune_optuna.py --data_root <DATA> --enqueue_baseline > tune_w0.log 2>&1 &
+sleep 60
+CUDA_VISIBLE_DEVICES=2 nohup python scripts/tune_optuna.py --data_root <DATA> > tune_w1.log 2>&1 &
 ```
-
-GPU 0 trains a27_full, GPU 1 trains a29_gan_decnoise. Each: train 200k → evaluate (v1, v2, v3 check set) → generative eval (diversity, noise ×0.5/0.6/0.75/1/1.5) → export. If interrupted, run the same command again: it resumes from the last checkpoint.
 
 While it runs:
 
 ```
-tail -f run_round7.log
-tail -f results/a29_gan_decnoise/logs/console.log     # spread255 and gpu_mem in the step lines
-paste -d'\n' <(column -s, -t < results/a27_full/logs/training_log.csv | tail -3) <(column -s, -t < results/a29_gan_decnoise/logs/training_log.csv | tail -3)
+tail -f tune_w0.log tune_w1.log
+column -s, -t < results/optuna/trials.csv
+python scripts/tune_optuna.py --summary
 nvidia-smi
 ```
 
-**Checks:**
-- **First hour:** `spread255` ~1.5 in both (constraint holds). If a29's falls below 0.5, tell me (the gate is closing).
-- **Epoch by epoch:** same schedule, so `val_psnr` of the two runs can be compared at equal epochs. If a29 is more than 0.3 dB behind a27_full after epoch 30, tell me: GPU 1 can then be freed early for tuning.
-- **Data workers:** the new families are cheap (~1 ms each); `it/s` should match round 6 (~2.6 it/s). If it is clearly lower, the CPU data loading is the bottleneck: tell me.
+Both workers stop by themselves after 40 trials in total or 14 h. Check: trial 0 (baseline) should reach J ≈ PSNR + 20·SSIM − 20·DISTS of a short a29 run; diversity values should be ≥ 0.6 for most trials.
+
+**Step 2: write the configs from the best trial, then confirm at 30k (phase B, ~4.5 h).**
+
+```
+python scripts/tune_optuna.py --summary
+python scripts/tune_optuna.py --write_configs
+head -2 src/architectures/a29_tuned/config.yaml        # shows the tuned values
+nohup python scripts/run_all.py --data_root <DATA> --archs a29_tuned_30k a29_base_30k > run_round8_phaseB.log 2>&1 &
+```
+
+Send me `run_round8_phaseB.log` and the `--summary` output. **Decision (by me, same hour):** the final run uses the tuned setting only if `a29_tuned_30k` beats `a29_base_30k` by ≥ 0.1 in J at noise ×0.5, with diversity ≥ 0.6 and a stable spread. Otherwise no final run: a29 is final.
+
+**Step 3: final run, 80 epochs (~21–27 h).**
+
+```
+nohup python scripts/run_all.py --data_root <DATA> --archs a29_tuned > run_round8_final.log 2>&1 &
+```
+
+It trains, evaluates (v1, v2, v3), runs the generative evaluation (noise ×0.5–1.5) and exports, like every earlier run. The second GPU is free during this run.
 
 ## 4. Time and memory (two 24 GB GPUs)
 
-From round 6 (measured: a27 6.9 h for 60k with 20 outputs per step; a25_full 20.4 h for 200k). The gate adds negligible compute. Memory was not printed in the round-6 log; the dry run shows `gpu_mem`.
+At the current machine speed (~1220 s per 2.5k steps).
 
-| Run | GPU | Steps | Time | Peak memory (of 24 GB) |
-|---|---|---|---|---|
-| v3 check-set build | CPU | – | ~1–2 min | – |
-| dry run (both) | 0 + 1 | 30 each | ~15 min | as below |
-| a27_full | 0 | 200k | ~21.5 h train + ~0.8 h evaluation | ~14–17 GB |
-| a29_gan_decnoise | 1 | 200k | ~21.5–22 h train + ~0.8 h evaluation | ~14–17 GB |
+| Step | GPU | Time | Peak memory (of 24 GB) |
+|---|---|---|---|
+| 0 smoke test | 1 | ~5–10 min | ~14–17 GB |
+| 1 Optuna, per complete trial (10k steps + 3 subset evaluations) | each | ~1.45 h; pruned trials ~0.4–0.8 h | ~14–17 GB per worker (one trial per GPU) |
+| 1 Optuna, total | both | ~14 h (cap 40 trials; ~8–12 complete) | |
+| 2 phase B (two 30k runs in parallel) | both | ~4.3 h + ~0.5 h evaluation | ~14–17 GB each |
+| 3 final `a29_tuned`, 80 epochs | 1 | ~27 h (~21 h at normal speed) + ~0.8 h evaluation | ~14–17 GB |
 
-- **Started ~12:00 on 10-17:** both done around **10:00–10:30 on 10-18**.
-- **Disk:** ~0.3 GB per model + ~30 MB for the v3 check set.
-- If the dry run shows more than ~22 GB: add `--train_args "--batch_size 12"` and tell me.
+Data loading: each worker uses 8 CPU data workers + 4 for the subset (as in round 7).
 
-## 5. What to send back
+Disk: the Optuna study keeps no checkpoints (~1 MB). Phase B and the final run: ~0.3 GB each.
 
-`run_round7.log` (comparison and generative tables). Per model:
+## 5. Schedule
 
-- `results/<model>/metrics/final_evaluation_summary.json` (now includes `benchmark_v3`)
-- `results/<model>/metrics/generative_eval.json`
-- `results/<model>/metrics/final_report.json`
-- `results/<model>/logs/training_log.csv`
-- `results/<model>/visualizations/epoch_0080_comparison.png`
-- `results/comparison/` (CSV files)
-
-First numbers to look at: PSNR / SSIM / DISTS at each noise scale against a25_full (32.02 / 0.8576 / 0.1399 at ×0.5), diversity ≥ 0.6, and a29 vs a27_full.
-
-## 6. Schedule
-
-| Day | What |
+| When | What |
 |---|---|
-| 10-17 | commit, pull, v3 check set, dry run, start both 200k runs (~12:00). I write the Optuna script during the runs |
-| 10-18 | ~10:30 results → architecture choice (`PLAN.md` §5) → Optuna phase A (~11:30 → 10-19 ~05:00) |
-| 10-19 | phase B (top-2 + baseline at 30k, ~05:00–12:00) → tuned 200k run (~12:30 → 10-20 ~10:30); export rehearsal of the 10-18 model on GPU 1 |
-| 10-20 | evaluate the tuned run, final choice, export (fresh noise per call), fvcore + ptflops, CPU test, report; **submit by 23:59** |
+| 10-18 ~now | commit, pull, `pip install optuna`, smoke test, **start phase A** |
+| 10-19 ~02:00 | phase A done → `--summary`, `--write_configs`, **start phase B** |
+| 10-19 ~06:30 | phase B done → decision → **start the final run** (~07:00) |
+| 10-20 ~04:00–10:30 | final run done → evaluation; final choice (`PLAN.md` §5): `a29_tuned` replaces a29 only if better at its best noise scale |
+| 10-20 | export (fresh noise per call), fvcore + ptflops, CPU test, report; **submit by 23:59** |
 
-Fallbacks: the 10-18 winner, then a25_full (already trained).
+Fallbacks: a29 (trained, current final), then a25_full.
+
+## 6. What to send back
+
+- After phase A: `python scripts/tune_optuna.py --summary` output and `results/optuna/trials.csv`.
+- After phase B: `run_round8_phaseB.log`.
+- After the final run: `run_round8_final.log`, and for `a29_tuned`: `metrics/final_evaluation_summary.json`, `metrics/generative_eval.json`, `logs/training_log.csv`, `visualizations/epoch_0080_comparison.png`.
