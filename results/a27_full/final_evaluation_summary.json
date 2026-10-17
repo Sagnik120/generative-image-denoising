@@ -1,0 +1,518 @@
+{
+  "architecture": "a27_full",
+  "checkpoint": "/DATA1/shrusti/genai_project/results/a27_full/checkpoints/best_model.pt",
+  "final_val_loss": 0.020025310962639674,
+  "final_val_psnr": 32.038,
+  "final_val_ssim": 0.8653,
+  "final_val_dists": 0.1439,
+  "benchmark": {
+    "overall": {
+      "n": 396,
+      "psnr": 32.038,
+      "ssim": 0.8653,
+      "dists": 0.1439,
+      "input_psnr": 24.494
+    },
+    "by_group": {
+      "single": {
+        "n": 108,
+        "psnr": 34.875,
+        "ssim": 0.9221,
+        "dists": 0.1028,
+        "input_psnr": 26.808
+      },
+      "extra": {
+        "n": 36,
+        "psnr": 34.4939,
+        "ssim": 0.9152,
+        "dists": 0.1026,
+        "input_psnr": 28.919
+      },
+      "pair": {
+        "n": 144,
+        "psnr": 30.5749,
+        "ssim": 0.84,
+        "dists": 0.162,
+        "input_psnr": 23.14
+      },
+      "triple": {
+        "n": 60,
+        "psnr": 29.4083,
+        "ssim": 0.7906,
+        "dists": 0.2036,
+        "input_psnr": 20.838
+      },
+      "unseen": {
+        "n": 48,
+        "psnr": 31.4894,
+        "ssim": 0.8694,
+        "dists": 0.1379,
+        "input_psnr": 24.599
+      }
+    },
+    "by_domain": {
+      "natural": {
+        "n": 198,
+        "psnr": 28.7594,
+        "ssim": 0.8277,
+        "dists": 0.1474,
+        "input_psnr": 22.209
+      },
+      "lowlight": {
+        "n": 99,
+        "psnr": 36.7224,
+        "ssim": 0.8938,
+        "dists": 0.1682,
+        "input_psnr": 28.438
+      },
+      "medical": {
+        "n": 99,
+        "psnr": 33.9109,
+        "ssim": 0.9121,
+        "dists": 0.1125,
+        "input_psnr": 25.118
+      }
+    },
+    "by_case": {
+      "gaussian_noise": {
+        "n": 12,
+        "psnr": 32.6321,
+        "ssim": 0.8722,
+        "dists": 0.1331,
+        "input_psnr": 20.984
+      },
+      "poisson_noise": {
+        "n": 12,
+        "psnr": 35.4068,
+        "ssim": 0.92,
+        "dists": 0.1054,
+        "input_psnr": 25.169
+      },
+      "salt_pepper": {
+        "n": 12,
+        "psnr": 38.9057,
+        "ssim": 0.9686,
+        "dists": 0.0551,
+        "input_psnr": 15.057
+      },
+      "speckle_noise": {
+        "n": 12,
+        "psnr": 34.3977,
+        "ssim": 0.9222,
+        "dists": 0.088,
+        "input_psnr": 25.601
+      },
+      "gaussian_blur": {
+        "n": 12,
+        "psnr": 33.9783,
+        "ssim": 0.9292,
+        "dists": 0.1096,
+        "input_psnr": 30.632
+      },
+      "motion_blur": {
+        "n": 12,
+        "psnr": 31.2282,
+        "ssim": 0.875,
+        "dists": 0.1784,
+        "input_psnr": 28.884
+      },
+      "defocus_blur": {
+        "n": 12,
+        "psnr": 33.5529,
+        "ssim": 0.8947,
+        "dists": 0.123,
+        "input_psnr": 30.185
+      },
+      "jpeg": {
+        "n": 12,
+        "psnr": 35.6248,
+        "ssim": 0.9415,
+        "dists": 0.0918,
+        "input_psnr": 35.144
+      },
+      "chromatic_aberration": {
+        "n": 12,
+        "psnr": 38.1487,
+        "ssim": 0.9756,
+        "dists": 0.0409,
+        "input_psnr": 29.615
+      },
+      "correlated_noise": {
+        "n": 12,
+        "psnr": 30.2565,
+        "ssim": 0.8555,
+        "dists": 0.1605,
+        "input_psnr": 22.708
+      },
+      "resize_blur": {
+        "n": 12,
+        "psnr": 33.7746,
+        "ssim": 0.8962,
+        "dists": 0.132,
+        "input_psnr": 34.24
+      },
+      "small_artifacts": {
+        "n": 12,
+        "psnr": 39.4505,
+        "ssim": 0.9939,
+        "dists": 0.0154,
+        "input_psnr": 29.809
+      },
+      "gaussian_blur+gaussian_noise": {
+        "n": 12,
+        "psnr": 28.7865,
+        "ssim": 0.8037,
+        "dists": 0.2022,
+        "input_psnr": 21.203
+      },
+      "motion_blur+gaussian_noise": {
+        "n": 12,
+        "psnr": 26.4514,
+        "ssim": 0.7265,
+        "dists": 0.2281,
+        "input_psnr": 20.198
+      },
+      "defocus_blur+poisson_noise": {
+        "n": 12,
+        "psnr": 29.991,
+        "ssim": 0.812,
+        "dists": 0.1819,
+        "input_psnr": 24.031
+      },
+      "gaussian_noise+jpeg": {
+        "n": 12,
+        "psnr": 33.3998,
+        "ssim": 0.9006,
+        "dists": 0.1376,
+        "input_psnr": 24.442
+      },
+      "gaussian_blur+jpeg": {
+        "n": 12,
+        "psnr": 31.6751,
+        "ssim": 0.8609,
+        "dists": 0.1491,
+        "input_psnr": 29.316
+      },
+      "motion_blur+jpeg": {
+        "n": 12,
+        "psnr": 29.5688,
+        "ssim": 0.8256,
+        "dists": 0.1922,
+        "input_psnr": 28.14
+      },
+      "gaussian_blur+salt_pepper": {
+        "n": 12,
+        "psnr": 32.0262,
+        "ssim": 0.859,
+        "dists": 0.1533,
+        "input_psnr": 15.812
+      },
+      "defocus_blur+speckle_noise": {
+        "n": 12,
+        "psnr": 27.7161,
+        "ssim": 0.758,
+        "dists": 0.1808,
+        "input_psnr": 22.586
+      },
+      "poisson_noise+jpeg": {
+        "n": 12,
+        "psnr": 34.2823,
+        "ssim": 0.9177,
+        "dists": 0.1005,
+        "input_psnr": 30.178
+      },
+      "chromatic_aberration+gaussian_noise": {
+        "n": 12,
+        "psnr": 31.9322,
+        "ssim": 0.8786,
+        "dists": 0.1461,
+        "input_psnr": 21.213
+      },
+      "gaussian_noise+salt_pepper": {
+        "n": 12,
+        "psnr": 31.3643,
+        "ssim": 0.8682,
+        "dists": 0.1364,
+        "input_psnr": 15.329
+      },
+      "chromatic_aberration+defocus_blur": {
+        "n": 12,
+        "psnr": 29.7058,
+        "ssim": 0.8699,
+        "dists": 0.1365,
+        "input_psnr": 25.229
+      },
+      "gaussian_blur+gaussian_noise+jpeg": {
+        "n": 12,
+        "psnr": 29.39,
+        "ssim": 0.8029,
+        "dists": 0.1854,
+        "input_psnr": 23.829
+      },
+      "motion_blur+poisson_noise+jpeg": {
+        "n": 12,
+        "psnr": 28.0698,
+        "ssim": 0.7635,
+        "dists": 0.2181,
+        "input_psnr": 25.205
+      },
+      "defocus_blur+speckle_noise+salt_pepper": {
+        "n": 12,
+        "psnr": 30.7429,
+        "ssim": 0.8206,
+        "dists": 0.1742,
+        "input_psnr": 15.836
+      },
+      "chromatic_aberration+gaussian_blur+gaussian_noise": {
+        "n": 12,
+        "psnr": 30.7522,
+        "ssim": 0.7945,
+        "dists": 0.2083,
+        "input_psnr": 22.202
+      },
+      "motion_blur+salt_pepper+jpeg": {
+        "n": 12,
+        "psnr": 28.0868,
+        "ssim": 0.7717,
+        "dists": 0.2323,
+        "input_psnr": 17.118
+      },
+      "uniform_noise": {
+        "n": 12,
+        "psnr": 32.2011,
+        "ssim": 0.8841,
+        "dists": 0.128,
+        "input_psnr": 22.168
+      },
+      "pixelate": {
+        "n": 12,
+        "psnr": 29.1181,
+        "ssim": 0.8286,
+        "dists": 0.1556,
+        "input_psnr": 26.875
+      },
+      "periodic_noise": {
+        "n": 12,
+        "psnr": 36.4875,
+        "ssim": 0.9599,
+        "dists": 0.0856,
+        "input_psnr": 27.97
+      },
+      "pixelate+uniform_noise": {
+        "n": 12,
+        "psnr": 28.1508,
+        "ssim": 0.8049,
+        "dists": 0.1827,
+        "input_psnr": 21.381
+      }
+    }
+  },
+  "benchmark_v2": {
+    "overall": {
+      "n": 96,
+      "psnr": 33.0362,
+      "ssim": 0.8734,
+      "dists": 0.142,
+      "input_psnr": 25.879
+    },
+    "by_group": {
+      "unseen_v2": {
+        "n": 60,
+        "psnr": 31.4161,
+        "ssim": 0.8316,
+        "dists": 0.1799,
+        "input_psnr": 23.823
+      },
+      "plan": {
+        "n": 36,
+        "psnr": 35.7363,
+        "ssim": 0.9432,
+        "dists": 0.0788,
+        "input_psnr": 29.304
+      }
+    },
+    "by_domain": {
+      "natural": {
+        "n": 48,
+        "psnr": 29.8221,
+        "ssim": 0.8564,
+        "dists": 0.1348,
+        "input_psnr": 24.079
+      },
+      "lowlight": {
+        "n": 24,
+        "psnr": 39.2137,
+        "ssim": 0.885,
+        "dists": 0.1712,
+        "input_psnr": 29.792
+      },
+      "medical": {
+        "n": 24,
+        "psnr": 33.2868,
+        "ssim": 0.8959,
+        "dists": 0.127,
+        "input_psnr": 25.565
+      }
+    },
+    "by_case": {
+      "film_grain": {
+        "n": 12,
+        "psnr": 28.5014,
+        "ssim": 0.7254,
+        "dists": 0.2217,
+        "input_psnr": 25.091
+      },
+      "glass_blur": {
+        "n": 12,
+        "psnr": 31.5828,
+        "ssim": 0.8779,
+        "dists": 0.2186,
+        "input_psnr": 31.395
+      },
+      "line_dropout": {
+        "n": 12,
+        "psnr": 37.5304,
+        "ssim": 0.972,
+        "dists": 0.0751,
+        "input_psnr": 19.686
+      },
+      "glass_blur+film_grain": {
+        "n": 12,
+        "psnr": 26.414,
+        "ssim": 0.6511,
+        "dists": 0.2633,
+        "input_psnr": 23.738
+      },
+      "line_dropout+jpeg": {
+        "n": 12,
+        "psnr": 33.0519,
+        "ssim": 0.9316,
+        "dists": 0.1207,
+        "input_psnr": 19.209
+      },
+      "sensor_noise": {
+        "n": 12,
+        "psnr": 34.5624,
+        "ssim": 0.9216,
+        "dists": 0.0946,
+        "input_psnr": 24.253
+      },
+      "ringing": {
+        "n": 12,
+        "psnr": 37.2258,
+        "ssim": 0.9789,
+        "dists": 0.0425,
+        "input_psnr": 29.006
+      },
+      "double_jpeg": {
+        "n": 12,
+        "psnr": 35.4208,
+        "ssim": 0.9289,
+        "dists": 0.0994,
+        "input_psnr": 34.654
+      }
+    }
+  },
+  "benchmark_v3": {
+    "overall": {
+      "n": 96,
+      "psnr": 33.4994,
+      "ssim": 0.9146,
+      "dists": 0.119,
+      "input_psnr": 27.0
+    },
+    "by_group": {
+      "v3": {
+        "n": 96,
+        "psnr": 33.4994,
+        "ssim": 0.9146,
+        "dists": 0.119,
+        "input_psnr": 27.0
+      }
+    },
+    "by_domain": {
+      "natural": {
+        "n": 48,
+        "psnr": 30.9556,
+        "ssim": 0.9091,
+        "dists": 0.1045,
+        "input_psnr": 25.939
+      },
+      "lowlight": {
+        "n": 24,
+        "psnr": 37.941,
+        "ssim": 0.9115,
+        "dists": 0.1737,
+        "input_psnr": 29.588
+      },
+      "medical": {
+        "n": 24,
+        "psnr": 34.1453,
+        "ssim": 0.9287,
+        "dists": 0.0932,
+        "input_psnr": 26.535
+      }
+    },
+    "by_case": {
+      "demosaic_artifacts": {
+        "n": 12,
+        "psnr": 36.7723,
+        "ssim": 0.9692,
+        "dists": 0.0469,
+        "input_psnr": 32.755
+      },
+      "chroma_noise": {
+        "n": 12,
+        "psnr": 37.4485,
+        "ssim": 0.9662,
+        "dists": 0.0795,
+        "input_psnr": 27.449
+      },
+      "mri_ghosting": {
+        "n": 12,
+        "psnr": 32.2111,
+        "ssim": 0.9265,
+        "dists": 0.1018,
+        "input_psnr": 32.318
+      },
+      "ct_ring_artifact": {
+        "n": 12,
+        "psnr": 35.5518,
+        "ssim": 0.9546,
+        "dists": 0.0899,
+        "input_psnr": 34.173
+      },
+      "demosaic_artifacts+gaussian_noise": {
+        "n": 12,
+        "psnr": 32.719,
+        "ssim": 0.8862,
+        "dists": 0.152,
+        "input_psnr": 22.19
+      },
+      "chroma_noise+gaussian_noise": {
+        "n": 12,
+        "psnr": 31.4805,
+        "ssim": 0.8645,
+        "dists": 0.1707,
+        "input_psnr": 21.744
+      },
+      "mri_ghosting+gaussian_noise": {
+        "n": 12,
+        "psnr": 30.1637,
+        "ssim": 0.8763,
+        "dists": 0.1569,
+        "input_psnr": 22.909
+      },
+      "ct_ring_artifact+gaussian_noise": {
+        "n": 12,
+        "psnr": 31.6481,
+        "ssim": 0.8736,
+        "dists": 0.1542,
+        "input_psnr": 22.466
+      }
+    }
+  },
+  "flops": 4977500160.0,
+  "gflops": 4.97750016,
+  "params": 5520027
+}

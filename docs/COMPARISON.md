@@ -1,4 +1,6 @@
-# Model comparison (a05–a28)
+# Model comparison (a05–a29)
+
+> **Update 2026-10-18:** round 7 done. **a29_gan_decnoise is the final architecture: 32.27 / 0.8682 / 0.1360 at noise ×0.5, diversity 0.86, 4.98 GFLOPs**: −0.84 dB from the regression a19. It beats a25_full and a27_full on all three quality metrics at their best eligible noise scales. See §12.
 
 > **Update 2026-10-16:** round 6 done. **a25_full (generative, 200k) is the best compliant model: 32.02 / 0.8576 / 0.1399 at noise ×0.5, diversity 1.04**: equal to the regression a15 on PSNR, better on DISTS, −1.1 dB vs a19. See §11.
 
@@ -322,3 +324,49 @@ Source: `run_round6.log`, `results/comparison_round6/`, `results/<model>/`.
 2. **The round-6 recipe is better than round 5's** (+0.47 dB at 60k, best noise scale). Trained 200k it should land at about 32.3–32.5 dB.
 3. **The remaining cost is where the noise enters, not the adversarial term:** forced diversity costs ~0.7 dB with or without an adversarial loss. Next step: put the noise where it can only add stochastic detail (decoder), and let the network choose per pixel how much (round 7, `PLAN.md`).
 4. **The two-phase schedule (a28) brings nothing** and is dropped.
+
+## 12. Round 7: final long runs on data v3 (a27_full, a29)
+
+Source: `run_round7.log`, `results/comparison_round7/`, `results/<model>/`. Both 200k steps, data v3, same recipe; only the noise placement differs. Compared at each model's **best eligible noise scale** (diversity ≥ 0.6), which is how the submission will run.
+
+### 12.1 Overall
+
+| Model | Scale | PSNR | SSIM | DISTS | Diversity | unseen_v2 (×1) | v3 check (×1) | Training at the end |
+|---|---|---|---|---|---|---|---|---|
+| a19 (regression ref.) | – | 33.112 | 0.8743 | 0.1293 | 0 | 31.88 | – | stable |
+| **a29_gan_decnoise** | **×0.5** | **32.269** | **0.8682** | **0.1360** | 0.86 | 30.91 | 33.45 / 0.112 | **stable** (spread 1.65) |
+| a27_full | ×0.6 | 32.184 | 0.8659 | 0.1444 | 0.675 | **31.42** | 33.50 / 0.119 | **unstable** (spread 4.5, −0.8 dB) |
+| a25_full (v2 data) | ×0.5 | 32.024 | 0.8576 | 0.1399 | 1.04 | 31.30 | – | stable |
+
+At noise ×1 (the comparison tables' default), a27_full ranks 2nd of 27 overall and a29 6th: ×1 is a29's worst setting (+0.34 dB from ×0.5), and its 4.982 GFLOPs put it behind the 4.978 models in the FLOPs rank by 0.004 GFLOPs.
+
+### 12.2 What each comparison isolates
+
+| Comparison | Isolates | Result |
+|---|---|---|
+| a29 − a27_full (same data, recipe, steps) | noise only in the decoder + per-pixel gate | +0.09 dB, +0.002 SSIM, **−0.008 DISTS** at best scales; **stable vs unstable** training |
+| a27_full − a25_full | round-6 recipe + data v3 (confounded) | +0.16 dB, +0.008 SSIM, +0.005 DISTS (best checkpoints) |
+| a29 − a25_full | round-6 recipe + data v3 + gated decoder noise | **+0.25 dB, +0.011 SSIM, −0.004 DISTS** |
+| a29 − a19 | generative vs regression, 200k | −0.84 dB, −0.006 SSIM, +0.007 DISTS (round 6: −1.09 / −0.017 / +0.011) |
+
+### 12.3 Training stability (the decisive difference)
+
+| Epoch | 41 | 49 | 59 | 69 | 80 |
+|---|---|---|---|---|---|
+| a27_full val PSNR / spread | 32.15 / 2.35 | 31.68 / 1.74 | 31.70 / 1.68 | 31.60 / 2.86 | 31.32 / **4.48** |
+| a29 val PSNR / spread | 32.13 / 1.97 | 32.00 / 1.88 | 31.85 / 1.71 | 31.91 / 1.67 | 31.93 / 1.65 |
+
+With noise in all 18 blocks and only a lower bound on diversity, a27_full drifted towards more and more randomness late in training (as its learning rate fell and the discriminator sharpened) and lost 0.83 dB from its peak. Its reported numbers come from an early checkpoint chosen on the reported benchmark. a29's gated decoder noise kept the spread at the target and its last checkpoint is its best.
+
+### 12.4 Where the final model still lacks (a29, ×1)
+
+1. **Structured exact-inverse cases** vs a25_full: `chromatic_aberration` −1.55, `small_artifacts` −1.23, `salt_pepper` −1.18, `periodic_noise` −1.12. Decoder-only noise did not fix this; the gap to a19 there is 3–6 dB.
+2. **Unseen families:** `unseen_v2` 30.91 (a27_full 31.42, a25_full 31.30): `line_dropout` and `film_grain`.
+3. **Mild corruptions:** `resize_blur` 33.56 still below its input (34.24).
+4. **Strengths:** best DISTS of every generative model in every domain; blur (`motion_blur` +0.63 over a25_full); v3 families handled (33.45 dB).
+
+### 12.5 Conclusions
+
+1. **a29 is the final architecture**: best at its submission setting on PSNR, SSIM and DISTS, eligible with margin (0.86), and the only one of the two whose 200k training is reproducible.
+2. **Its weaknesses are not clearly hyperparameter-shaped** (structured cases, unseen families), so expect tuning to give +0.1–0.3 dB in total, not to close the 0.84 dB gap.
+3. **Noise ×0.5** is the submission setting unless tuning changes the trade-off.
