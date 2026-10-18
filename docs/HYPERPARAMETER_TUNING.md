@@ -103,7 +103,45 @@ At the current machine speed (~1220 s per 2.5k steps); times are approximate.
 
 ---
 
-## 5. Sources
+## 5. Results of the Optuna search (10-18, phase A)
+
+Study `a29_tune` (`/DATA1/shrusti/genai_project/results/optuna/`, `trials_a29_tune.csv`, `tune_w0/1.log`). Run 10-18 ~11:50 → ~20:40 on two GPUs (~65 min per complete trial, ~16 min per pruned trial). **38 trials: 15 complete, 14 pruned at 2.5k steps, 9 failed** (all on the diversity rule, < 0.6 at noise ×0.5). Scores are on the 132-image subset after 10k steps at noise ×0.5; they are not comparable with 200k benchmark numbers.
+
+### 5.1 Best complete trials
+
+| Trial | J | PSNR | SSIM | DISTS | Diversity | lr | D/G lr ratio | adv weight | div target | SSIM weight |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **0 (a29 setting)** | **41.609** | 29.827 | 0.8086 | 0.2195 | 0.706 | 4.0e-4 | 1 | 0.0050 | 1.50 | 0.20 |
+| 37 (best J) | 42.746 | 30.326 | 0.8217 | 0.2008 | 0.625 | 7.9e-4 | 2 | 0.0033 | 1.37 | 0.19 |
+| 18 | 42.725 | 30.319 | 0.8225 | 0.2022 | 0.634 | 7.9e-4 | 2 | 0.0028 | 1.34 | 0.20 |
+| **32 (chosen)** | **42.687** | 30.309 | **0.8251** | 0.2062 | **0.741** | 7.6e-4 | **0.5** | 0.0028 | 1.60 | 0.33 |
+| 9 | 42.686 | 30.306 | 0.8235 | 0.2045 | 0.662 | 7.5e-4 | 1 | 0.0028 | 1.45 | 0.25 |
+| 28 | 42.678 | 30.298 | 0.8242 | 0.2053 | 0.661 | 7.3e-4 | 1 | 0.0034 | 1.42 | 0.32 |
+| 11 | 42.597 | 30.276 | 0.8231 | 0.2071 | 0.602 | 6.8e-4 | 2 | 0.0034 | 1.32 | 0.31 |
+| 8 | 42.312 | 30.123 | 0.8186 | 0.2092 | 0.710 | 5.9e-4 | 1 | 0.0026 | 1.55 | 0.23 |
+
+### 5.2 What the search shows
+
+1. **Every top setting beats the baseline clearly:** +1.0 to +1.1 in J (+0.5 dB PSNR, +0.014 SSIM, −0.015 to −0.019 DISTS at 10k steps). The top seven are within 0.15 J of each other, which is about single-seed noise on 132 images: there is no single clear winner, but a clear region.
+2. **Learning rate is the main lever.** All top trials sit at 7.3–8.0e-4, the top of the range (2e-4 – 8e-4). J rises steadily with lr (5.9e-4 → 42.31, ~7.5e-4 → 42.69). Caution: a higher learning rate is exactly what a 10k-step search favours (short-horizon bias, Wu et al. 2018); at 200k the cosine schedule spends most of its time at lower rates, so the real gain will be smaller than at 10k.
+3. **Lower adversarial weight helps:** the top trials use 0.0026–0.0034 (a29: 0.005).
+4. **The diversity target sets eligibility.** All 9 failures had a target of 1.15–1.31; diversity ≥ 0.6 needs a target ≳ 1.33. The best-J trials (37, 18: 1.34–1.37) sit just above the limit (0.625–0.634).
+5. **SSIM weight and D/G lr ratio are secondary.** Ratios 0.5, 1 and 2 all appear among the top; a higher SSIM weight raises SSIM slightly (trials 32, 28).
+
+### 5.3 Decision: trial 32, straight to 80 epochs (10-19)
+
+**Chosen: trial 32**: lr 7.55e-4, D/G ratio 0.5, adversarial weight 0.00275, diversity target 1.60, SSIM weight 0.334. It is 0.06 J behind trial 37 (noise level) but safer on the two things that can ruin a 200k run:
+- **Discriminator learning rate:** trial 32's is 3.8e-4 (0.5 × 7.55e-4), almost exactly a29's proven 4e-4. Trials 37/18 use ratio 2, so their discriminator would run at ~1.6e-3, 4× anything trained for 200k so far. a27_full's late collapse came from the generator–discriminator balance.
+- **Diversity margin:** 0.741 vs 0.625 at 10k. From trial 0 (0.706 at 10k) to a29 (0.86 at 200k), diversity rose with training; trial 32 has the most margin above 0.6.
+- **Quality:** best SSIM of all trials (0.8251), PSNR within 0.02 dB of the best, DISTS +0.005 behind trial 37.
+
+**Phase B (30k confirmation) is skipped** for time: the 80-epoch run (~25 h) must start on 10-19 to finish on 10-20. This accepts the risk that the 10k advantage does not carry to 200k. The guard is the final comparison against a29, which is already trained.
+
+**Confirmed 10-19: trial 37 (best J) also runs, on the second GPU, for the full 80 epochs (no early stopping)**, so the best-J setting is tested too. Both runs end ~10-20 morning, and the best of {a29, a29_tuned (trial 32), a29_tuned_b (trial 37)} is submitted.
+
+---
+
+## 6. Sources
 
 - Akiba et al., "Optuna: A Next-generation Hyperparameter Optimization Framework", KDD 2019.
 - Bergstra, Bardenet, Bengio & Kégl, "Algorithms for Hyper-Parameter Optimization" (TPE), NeurIPS 2011.

@@ -1,0 +1,116 @@
+nohup: ignoring input
+[tune] study a29_tune at sqlite:////DATA1/shrusti/genai_project/results/optuna/a29_tune.db; trial log /DATA1/shrusti/genai_project/results/optuna/trials_a29_tune.csv
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/optuna/_experimental.py:32: ExperimentalWarning: Argument ``multivariate`` is an experimental feature. The interface can change in the future.
+  warnings.warn(
+[I 2026-10-18 05:45:40,636] Using an existing study with name 'a29_tune' instead of creating a new one.
+[dataset] training views: coco=33041, natural_whole=3450, natural_tiles=20552, bsds=300, lol_high=485, lol_low=485, xray=4919, mri=8195, ct=8000, ultrasound=624
+[dataset] benchmark: 396 fixed image pairs.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=VGG16_Weights.IMAGENET1K_V1`. You can also use `weights=VGG16_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/home/m25cse030/genai_project/generative-image-denoising/venv/lib/python3.8/site-packages/DISTS_pytorch/DISTS_pt.py:63: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  weights = torch.load(os.path.join(sys.prefix,'weights.pt'))
+[trial 1] step 2500: J 37.438 PSNR 28.344 SSIM 0.7305 DISTS 0.2759 div 0.78
+[I 2026-10-18 06:01:27,336] Trial 1 pruned. 
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 2] step 2500: J 39.052 PSNR 28.944 SSIM 0.7727 DISTS 0.2674 div 0.68
+[trial 2] step 5000: J 40.701 PSNR 29.641 SSIM 0.8011 DISTS 0.2481 div 0.70
+[I 2026-10-18 07:06:30,667] Trial 2 finished with value: 41.930742850473756 and parameters: {'lr': 0.0004523828541408637, 'disc_lr_ratio': 0.5, 'adv_weight': 0.00449439142196937, 'div_target': 1.4417977196136431, 'ssim_weight': 0.2449988228383818}. Best is trial 2 with value: 41.930742850473756.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 5] step 2500: J 38.865 PSNR 28.895 SSIM 0.7676 DISTS 0.2691 div 0.65
+[I 2026-10-18 07:22:06,795] Trial 5 pruned. 
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 6] step 2500: J 38.914 PSNR 28.855 SSIM 0.7723 DISTS 0.2693 div 0.77
+[I 2026-10-18 07:37:43,324] Trial 6 pruned. 
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 7] step 2500: J 39.252 PSNR 29.016 SSIM 0.7777 DISTS 0.2659 div 0.57
+[trial 7] step 5000: J 40.966 PSNR 29.757 SSIM 0.8051 DISTS 0.2447 div 0.58
+[W 2026-10-18 08:42:48,561] Trial 7 failed with parameters: {'lr': 0.0004772655179003652, 'disc_lr_ratio': 0.5, 'adv_weight': 0.003530006315151652, 'div_target': 1.1549816770336965, 'ssim_weight': 0.28386956042339034} because of the following error: The value nan is not acceptable.
+[W 2026-10-18 08:42:48,561] Trial 7 failed with value nan.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 9] step 2500: J 39.998 PSNR 29.375 SSIM 0.7883 DISTS 0.2571 div 0.73
+[trial 9] step 5000: J 41.526 PSNR 30.002 SSIM 0.8130 DISTS 0.2368 div 0.72
+[I 2026-10-18 09:47:54,938] Trial 9 finished with value: 42.68578294402174 and parameters: {'lr': 0.0007499450784380947, 'disc_lr_ratio': 1.0, 'adv_weight': 0.0027665715486749833, 'div_target': 1.4483660617932848, 'ssim_weight': 0.25015350062137054}. Best is trial 9 with value: 42.68578294402174.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 11] step 2500: J 39.699 PSNR 29.234 SSIM 0.7852 DISTS 0.2619 div 0.67
+[trial 11] step 5000: J 41.375 PSNR 29.927 SSIM 0.8112 DISTS 0.2388 div 0.65
+[I 2026-10-18 10:52:59,916] Trial 11 finished with value: 42.59696052707766 and parameters: {'lr': 0.0006762235646801675, 'disc_lr_ratio': 2.0, 'adv_weight': 0.003439571759430872, 'div_target': 1.3186402957056227, 'ssim_weight': 0.3065730318781831}. Best is trial 9 with value: 42.68578294402174.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 14] step 2500: J 39.495 PSNR 29.136 SSIM 0.7818 DISTS 0.2639 div 0.68
+[trial 14] step 5000: J 41.210 PSNR 29.858 SSIM 0.8089 DISTS 0.2413 div 0.69
+[I 2026-10-18 11:58:06,649] Trial 14 finished with value: 42.456211164875725 and parameters: {'lr': 0.0005652900584504387, 'disc_lr_ratio': 2.0, 'adv_weight': 0.003466719579810164, 'div_target': 1.4042675071933117, 'ssim_weight': 0.3197460440146648}. Best is trial 9 with value: 42.68578294402174.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 16] step 2500: J 39.913 PSNR 29.326 SSIM 0.7880 DISTS 0.2586 div 0.56
+[trial 16] step 5000: J 41.361 PSNR 29.920 SSIM 0.8093 DISTS 0.2373 div 0.58
+[W 2026-10-18 13:03:10,150] Trial 16 failed with parameters: {'lr': 0.0006165927400919338, 'disc_lr_ratio': 1.0, 'adv_weight': 0.004701031976304574, 'div_target': 1.1510239412554837, 'ssim_weight': 0.2987098612719947} because of the following error: The value nan is not acceptable.
+[W 2026-10-18 13:03:10,150] Trial 16 failed with value nan.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 18] step 2500: J 40.039 PSNR 29.391 SSIM 0.7878 DISTS 0.2554 div 0.66
+[trial 18] step 5000: J 41.537 PSNR 30.001 SSIM 0.8117 DISTS 0.2349 div 0.67
+[I 2026-10-18 14:08:09,716] Trial 18 finished with value: 42.72494695702828 and parameters: {'lr': 0.0007859429241984022, 'disc_lr_ratio': 2.0, 'adv_weight': 0.002782637620395911, 'div_target': 1.338832613914507, 'ssim_weight': 0.19873774049171916}. Best is trial 18 with value: 42.72494695702828.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 20] step 2500: J 39.776 PSNR 29.269 SSIM 0.7833 DISTS 0.2579 div 0.59
+[I 2026-10-18 14:23:44,849] Trial 20 pruned. 
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 22] step 2500: J 39.545 PSNR 29.151 SSIM 0.7816 DISTS 0.2619 div 0.71
+[I 2026-10-18 14:39:19,885] Trial 22 pruned. 
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 24] step 2500: J 39.672 PSNR 29.237 SSIM 0.7812 DISTS 0.2594 div 0.59
+[I 2026-10-18 14:54:54,495] Trial 24 pruned. 
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 26] step 2500: J 36.100 PSNR 27.781 SSIM 0.6969 DISTS 0.2810 div 0.53
+[I 2026-10-18 15:10:28,445] Trial 26 pruned. 
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 27] step 2500: J 40.057 PSNR 29.392 SSIM 0.7901 DISTS 0.2569 div 0.59
+[trial 27] step 5000: J 41.505 PSNR 29.980 SSIM 0.8116 DISTS 0.2354 div 0.59
+[W 2026-10-18 16:15:23,443] Trial 27 failed with parameters: {'lr': 0.0007356370201590915, 'disc_lr_ratio': 2.0, 'adv_weight': 0.004579662357829658, 'div_target': 1.1563564733259966, 'ssim_weight': 0.3155538521685432} because of the following error: The value nan is not acceptable.
+[W 2026-10-18 16:15:23,443] Trial 27 failed with value nan.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 29] step 2500: J 39.866 PSNR 29.295 SSIM 0.7865 DISTS 0.2580 div 0.60
+[trial 29] step 5000: J 41.454 PSNR 30.002 SSIM 0.8110 DISTS 0.2384 div 0.60
+[W 2026-10-18 17:20:19,913] Trial 29 failed with parameters: {'lr': 0.000709280494769325, 'disc_lr_ratio': 1.0, 'adv_weight': 0.0030040370337176933, 'div_target': 1.1545305097045648, 'ssim_weight': 0.2696715891021764} because of the following error: The value nan is not acceptable.
+[W 2026-10-18 17:20:19,914] Trial 29 failed with value nan.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 31] step 2500: J 40.011 PSNR 29.377 SSIM 0.7891 DISTS 0.2574 div 0.66
+[trial 31] step 5000: J 41.419 PSNR 29.946 SSIM 0.8115 DISTS 0.2379 div 0.65
+[I 2026-10-18 18:25:18,417] Trial 31 finished with value: 42.63992581706444 and parameters: {'lr': 0.0007434365075395526, 'disc_lr_ratio': 1.0, 'adv_weight': 0.00398606623490117, 'div_target': 1.321608235610282, 'ssim_weight': 0.2995127858193519}. Best is trial 18 with value: 42.72494695702828.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 33] step 2500: J 39.891 PSNR 29.310 SSIM 0.7887 DISTS 0.2597 div 0.79
+[trial 33] step 5000: J 41.327 PSNR 29.890 SSIM 0.8117 DISTS 0.2398 div 0.79
+[I 2026-10-18 19:30:16,858] Trial 33 finished with value: 42.43622607585833 and parameters: {'lr': 0.0007235955366022398, 'disc_lr_ratio': 1.0, 'adv_weight': 0.004836654722650548, 'div_target': 1.5909761182866429, 'ssim_weight': 0.3359417044727763}. Best is trial 18 with value: 42.72494695702828.
+[a29_gan_decnoise] parameters: 5,518,160  | total steps: 10,000  | amp: True
+[a29_gan_decnoise] discriminator: wavelet, 1,099,137 parameters (training only)
+[trial 36] step 2500: J 39.972 PSNR 29.351 SSIM 0.7891 DISTS 0.2581 div 0.80
+[trial 36] step 5000: J 41.466 PSNR 29.954 SSIM 0.8132 DISTS 0.2376 div 0.77
+[I 2026-10-18 20:35:15,446] Trial 36 finished with value: 42.611352413011915 and parameters: {'lr': 0.0007959670520145499, 'disc_lr_ratio': 0.5, 'adv_weight': 0.00286098303579429, 'div_target': 1.5823307138560672, 'ssim_weight': 0.3358107690134338}. Best is trial 18 with value: 42.72494695702828.
+[tune] 38 trials: {'COMPLETE': 14, 'PRUNED': 14, 'FAIL': 9, 'RUNNING': 1}
+  # 18 J 42.725  PSNR 30.319 SSIM 0.8225 DISTS 0.2022 div 0.63  {'lr': 0.0007859429241984022, 'disc_lr_ratio': 2.0, 'adv_weight': 0.002782637620395911, 'div_target': 1.338832613914507, 'ssim_weight': 0.19873774049171916}
+  # 32 J 42.686  PSNR 30.309 SSIM 0.8251 DISTS 0.2062 div 0.74  {'lr': 0.0007551945548328961, 'disc_lr_ratio': 0.5, 'adv_weight': 0.0027545378467021975, 'div_target': 1.5985779941151637, 'ssim_weight': 0.3336071641695135}
+  #  9 J 42.686  PSNR 30.306 SSIM 0.8235 DISTS 0.2045 div 0.66  {'lr': 0.0007499450784380947, 'disc_lr_ratio': 1.0, 'adv_weight': 0.0027665715486749833, 'div_target': 1.4483660617932848, 'ssim_weight': 0.25015350062137054}
+  # 28 J 42.678  PSNR 30.298 SSIM 0.8242 DISTS 0.2053 div 0.66  {'lr': 0.0007340040452954821, 'disc_lr_ratio': 1.0, 'adv_weight': 0.003425032190223522, 'div_target': 1.4197283419223952, 'ssim_weight': 0.31574118861115563}
+  # 31 J 42.640  PSNR 30.294 SSIM 0.8227 DISTS 0.2054 div 0.60  {'lr': 0.0007434365075395526, 'disc_lr_ratio': 1.0, 'adv_weight': 0.00398606623490117, 'div_target': 1.321608235610282, 'ssim_weight': 0.2995127858193519}
+  # 36 J 42.611  PSNR 30.272 SSIM 0.8242 DISTS 0.2072 div 0.71  {'lr': 0.0007959670520145499, 'disc_lr_ratio': 0.5, 'adv_weight': 0.00286098303579429, 'div_target': 1.5823307138560672, 'ssim_weight': 0.3358107690134338}
+  # 11 J 42.597  PSNR 30.276 SSIM 0.8231 DISTS 0.2071 div 0.60  {'lr': 0.0006762235646801675, 'disc_lr_ratio': 2.0, 'adv_weight': 0.003439571759430872, 'div_target': 1.3186402957056227, 'ssim_weight': 0.3065730318781831}
+  # 10 J 42.485  PSNR 30.186 SSIM 0.8202 DISTS 0.2052 div 0.74  {'lr': 0.0007683122797517991, 'disc_lr_ratio': 1.0, 'adv_weight': 0.0038289161460983733, 'div_target': 1.7283820436566824, 'ssim_weight': 0.2508790570900187}
+  # 14 J 42.456  PSNR 30.218 SSIM 0.8209 DISTS 0.2090 div 0.62  {'lr': 0.0005652900584504387, 'disc_lr_ratio': 2.0, 'adv_weight': 0.003466719579810164, 'div_target': 1.4042675071933117, 'ssim_weight': 0.3197460440146648}
+  # 33 J 42.436  PSNR 30.165 SSIM 0.8212 DISTS 0.2076 div 0.66  {'lr': 0.0007235955366022398, 'disc_lr_ratio': 1.0, 'adv_weight': 0.004836654722650548, 'div_target': 1.5909761182866429, 'ssim_weight': 0.3359417044727763}

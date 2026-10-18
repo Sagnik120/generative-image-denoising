@@ -1,17 +1,16 @@
 # Current status
 
-Last updated 2026-10-18 (after round 7). Next steps: `PLAN.md` §6 and `HYPERPARAMETER_TUNING.md`. Model numbers: `COMPARISON.md` §12, `architectures/`.
+Last updated 2026-10-19 (after the Optuna search). Next steps: `PLAN.md` §6. Tuning results: `HYPERPARAMETER_TUNING.md` §5. Model numbers: `COMPARISON.md` §12.
 
 ## 1. Summary
 
-- **Final architecture: a29_gan_decnoise** (conditional GAN, NAF U-Net with noise only in the decoder and a learned per-pixel gate; wavelet-domain discriminator; data v3; 200k steps).
-  - At noise ×0.5: **32.27 dB / 0.8682 / 0.1360 at 4.98 GFLOPs, diversity 0.86 grey levels.**
-  - Best generative model on all three quality metrics.
-  - −0.84 dB from the regression a19, which is not allowed.
-- **a27_full (noise in all blocks) is not chosen.** Its training became unstable after epoch ~45 (sample spread 4.5 vs a 1.5 target, −0.8 dB by epoch 80), and its numbers rely on an early checkpoint.
-- **Fallbacks, all trained:** a29 (as is), a25_full.
-- **Remaining weaknesses:** structured corruptions (`chromatic_aberration`, `small_artifacts`, `salt_pepper`), unseen families (`unseen_v2` 30.91), `resize_blur` below its input.
-- **Next:** Optuna tuning of a29 (10-18 → 10-19 morning), a 30k confirmation, the tuned 200k run (10-19 → 10-20 morning), then final choice, export and report on 10-20 (deadline 23:59).
+- **Final architecture: a29_gan_decnoise.** At noise ×0.5: 32.27 dB / 0.8682 / 0.1360 at 4.98 GFLOPs, diversity 0.86. Trained and ready as the fallback submission.
+- **Optuna search done** (10-18; 38 trials: 15 complete, 14 pruned, 9 failed on diversity).
+  - The top settings beat the a29 setting by about +1.0 in J at 10k steps (+0.5 dB, +0.014 SSIM, −0.017 DISTS).
+  - The gain comes mostly from a **higher learning rate (~7.5e-4)** and a **lower adversarial weight (~0.003)**.
+  - The diversity target must stay ≳ 1.33.
+- **Decision:** train **trial 32** (lr 7.55e-4, D/G ratio 0.5, adversarial 0.00275, diversity target 1.60, SSIM weight 0.334) directly for **80 epochs** as `a29_tuned` (GPU 0), and trial 37 as `a29_tuned_b` (GPU 1) in parallel, both to the full 80 epochs (no early stopping). The 30k confirmation is skipped for time; a29 guards against a worse result.
+- **10-20:** final choice among a29 / a29_tuned (/ a29_tuned_b), export, report, submission by 23:59.
 
 ## 2. The brief, line by line
 
@@ -116,8 +115,7 @@ Target for the generative model: as close to a19 as possible on PSNR/SSIM, equal
 ## 8. Checklist
 
 - [x] Rounds 4–7; final architecture a29 (32.27 / 0.8682 / 0.1360, ×0.5)
-- [ ] Optuna script + subset benchmark + smoke test (10-18 morning)
-- [ ] Optuna phase A (10-18 → 10-19 ~03:00); 30k confirmation (→ ~07:30)
-- [ ] Tuned 200k run (10-19 ~08:00 → 10-20 ~09:30)
+- [x] Optuna script + smoke test; Optuna search (10-18, 38 trials); trial 32 chosen
+- [ ] Configs for trials 32 (and 37); tuned 80-epoch run(s) (10-19 → 10-20 ~12:00)
 - [ ] Final choice; export with fresh noise per call; fvcore + ptflops; CPU test; diversity samples (10-20)
 - [ ] 1–2 page report; submission by 10-20 23:59
