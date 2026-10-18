@@ -45,6 +45,8 @@ def parse_args():
                    help="Sampling step counts to evaluate (diffusion samplers only).")
     p.add_argument("--noise_scales", nargs="*", type=float, default=[0.5, 0.6, 0.75, 1.0, 1.5],
                    help="Test-time noise multipliers evaluated at the model's own step count.")
+    p.add_argument("--out_name", default="generative_eval.json",
+                   help="Output file in results/<arch>/metrics/ (use another name for extra scales).")
     p.add_argument("--seeds", type=int, default=8, help="Noise seeds for the diversity measurement.")
     p.add_argument("--diversity_images", type=int, default=96)
     p.add_argument("--batch_size", type=int, default=16)
@@ -128,8 +130,8 @@ def main():
     out = {"architecture": args.arch, "checkpoint": str(ckpt), "seeds": args.seeds,
            "results": rows,
            "mean_noise_strength": sum(noise_strength) / len(noise_strength) if noise_strength else None}
-    save_json(out, results_dir / "metrics" / "generative_eval.json")
-    print(f"[eval_generative] written to {results_dir / 'metrics' / 'generative_eval.json'}")
+    save_json(out, results_dir / "metrics" / args.out_name)
+    print(f"[eval_generative] written to {results_dir / 'metrics' / args.out_name}")
 
 
 if __name__ == "__main__":

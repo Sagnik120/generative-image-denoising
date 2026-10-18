@@ -27,6 +27,9 @@ Usage (one worker per GPU, same study):
     CUDA_VISIBLE_DEVICES=1 python scripts/tune_optuna.py --data_root <DATA>
 After the search (writes the phase-B and final configs from the best trial):
     python scripts/tune_optuna.py --write_configs
+Config of one chosen trial as a given architecture (80 epochs by default):
+    python scripts/tune_optuna.py --write_configs --trial 32 --arch a29_tuned
+    python scripts/tune_optuna.py --write_configs --trial 37 --arch a29_tuned_b
 Summary of all trials:
     python scripts/tune_optuna.py --summary
 """
@@ -79,6 +82,9 @@ def parse_args():
     p.add_argument("--enqueue_baseline", action="store_true",
                    help="Add the current a29 setting as the first trial (one worker only).")
     p.add_argument("--write_configs", action="store_true")
+    p.add_argument("--trial", type=int, default=None, help="--write_configs: use this trial, not the best.")
+    p.add_argument("--arch", default=None, help="--write_configs --trial: architecture to write (e.g. a29_tuned).")
+    p.add_argument("--epochs", type=int, default=80, help="--write_configs --trial: epochs of that config.")
     p.add_argument("--summary", action="store_true")
     p.add_argument("--smoke", action="store_true", help="Tiny trials (60 steps) to test the setup.")
     p.add_argument("--device", default=None, choices=["cuda", "mps", "cpu"])
@@ -234,13 +240,19 @@ def load_study(args):
         pruner=optuna.pruners.SuccessiveHalvingPruner(min_resource=args.rungs[0], reduction_factor=3))
 
 
-def write_configs(study):
-    best = study.best_trial
+def write_configs(study, trial_no=None, arch=None, epochs=80):
+    best = study.best_trial if trial_no is None else study.trials[trial_no]
+    if best.value is None:
+        raise SystemExit(f"[tune] trial {trial_no} has no completed value")
     hp = {**BASELINE, **best.params}
-    print(f"[tune] best trial {best.number}: J {best.value:.3f}  {hp}  {best.user_attrs}")
+    print(f"[tune] trial {best.number}: J {best.value:.3f}  {hp}  {best.user_attrs}")
     base = load_yaml(PROJECT_ROOT / default_config_path(BASE_ARCH))
-    for arch, epochs, note in (("a29_tuned_30k", 12, "phase B: best Optuna setting, 30k steps"),
-                               ("a29_tuned", 80, "final: best Optuna setting, 200k steps")):
+    if trial_no is not None:
+        targets = ((arch or "a29_tuned", epochs, f"final: Optuna trial {best.number}, {epochs * 2500:,} steps"),)
+    else:
+        targets = (("a29_tuned_30k", 12, "phase B: best Optuna setting, 30k steps"),
+                   ("a29_tuned", 80, "final: best Optuna setting, 200k steps"))
+    for arch, epochs, note in targets:
         cfg = apply_params(copy.deepcopy(base), hp)
         cfg["architecture"] = arch
         cfg["train"]["epochs"] = epochs
@@ -276,7 +288,7 @@ def main():
     if args.summary:
         return summary(study)
     if args.write_configs:
-        return write_configs(study)
+        return write_configs(study, args.trial, args.arch, args.epochs)
     if args.enqueue_baseline and not study.trials:
         study.enqueue_trial(BASELINE)
     device = get_device(args.device)

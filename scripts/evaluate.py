@@ -48,6 +48,9 @@ def parse_args():
                     help="Device to evaluate on (defaults to auto-detecting cuda -> mps -> cpu).")
     p.add_argument("--allow_big_gpu", action="store_true")
     p.add_argument("--allow_missing_data", action="store_true")
+    p.add_argument("--noise_scale", type=float, default=1.0,
+                   help="Generative models: test-time noise multiplier. Values other than 1 write "
+                        "the outputs with a '_noise<scale>' suffix, so the default files are kept.")
     return p.parse_args()
 
 
@@ -102,6 +105,11 @@ def main():
     bundle = build_bundle(args.arch, cfg, device)
     bundle.load_state_dict(load_checkpoint(ckpt_path, map_location=device))
     print(f"[evaluate.py] Loaded checkpoint: {ckpt_path}")
+    suffix = "" if args.noise_scale == 1.0 else f"_noise{args.noise_scale:g}"
+    if suffix:
+        from src.common.gennet import set_noise_scale
+        set_noise_scale(bundle.get_inference_model(), args.noise_scale)
+        print(f"[evaluate.py] test-time noise scale x{args.noise_scale:g} (outputs *{suffix}*)")
 
     eval_results = run_full_evaluation(bundle, val_loader, device)
     # Round 3: also score benchmark v2 (new unseen families) when it has been built.
@@ -129,11 +137,13 @@ def main():
         **eval_results,
         **flop_info,
     }
-    save_json(summary, results_dir / "metrics" / "final_evaluation_summary.json")
-    write_breakdown_csv(summary["benchmark"], results_dir / "metrics" / "benchmark_breakdown.csv")
+    if suffix:
+        summary["noise_scale"] = args.noise_scale
+    save_json(summary, results_dir / "metrics" / f"final_evaluation_summary{suffix}.json")
+    write_breakdown_csv(summary["benchmark"], results_dir / "metrics" / f"benchmark_breakdown{suffix}.csv")
     for key in ("benchmark_v2", "benchmark_v3"):
         if key in summary:
-            write_breakdown_csv(summary[key], results_dir / "metrics" / f"{key}_breakdown.csv")
+            write_breakdown_csv(summary[key], results_dir / "metrics" / f"{key}_breakdown{suffix}.csv")
     print("[evaluate.py] Final evaluation summary:")
     for k, v in summary.items():
         if k not in ("benchmark", "benchmark_v2", "benchmark_v3"):

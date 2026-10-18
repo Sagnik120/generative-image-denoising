@@ -64,7 +64,8 @@ ARCHITECTURES = {
     # ---- round 8: hyperparameter tuning of a29 (configs written by scripts/tune_optuna.py) ----
     "a29_base_30k": "src.architectures.a29_base_30k.model",
     "a29_tuned_30k": "src.architectures.a29_tuned_30k.model",
-    "a29_tuned": "src.architectures.a29_tuned.model",
+    "a29_tuned": "src.architectures.a29_tuned.model",       # Optuna trial 32
+    "a29_tuned_b": "src.architectures.a29_tuned_b.model",   # Optuna trial 37
 }
 
 # Architectures are numbered in the order they were added. Round 1 (a01-a04)
