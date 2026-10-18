@@ -32,6 +32,7 @@ The plan: tune a29 with Optuna on 10-18, confirm the best setting at 30k steps, 
 | Data | v3, as a29; same data seed in every trial | removes one source of noise between trials |
 | Validation | 132-image subset of benchmark v1 (4 per case, all 33 cases, all three domains) + diversity on 16 images × 4 seeds, **at noise ×0.5** (the submission setting) | ~5 min per evaluation instead of ~15 |
 | Workers | 2 (one per GPU, one trial per GPU; ~14–17 GB each) | two trials do not fit on one 24 GB GPU |
+| Storage | SQLite study and trial log in `/DATA1/shrusti/genai_project/results/optuna/` (HDD results folder, not the code folder) | keeps all results in one place with the earlier runs |
 
 **Objective (maximise):** `J = PSNR + 20 · SSIM − 20 · DISTS` on the validation subset at noise ×0.5.
 - The weights put the three quality metrics on a similar scale: from our results, 0.01 SSIM ≈ 0.01 DISTS ≈ 0.2 dB in how they move together (e.g. a25 → a25_full: +1.07 dB, +0.019 SSIM, −0.026 DISTS).

@@ -17,6 +17,11 @@ adversarial weight, diversity target, SSIM weight. Sampler: TPE; pruner:
 successive halving with rungs at 2.5k and 5k steps. Trial 0 is the current
 a29 setting. Several workers (one per GPU) share one SQLite study.
 
+All outputs (SQLite study, trials.csv) go to <results_root>/optuna. Default
+results root: the HDD folder /DATA1/shrusti/genai_project/results when it
+exists (where every run's results live), else <repo>/results; override with
+--results_root or the GENAI_RESULTS_ROOT environment variable.
+
 Usage (one worker per GPU, same study):
     CUDA_VISIBLE_DEVICES=0 python scripts/tune_optuna.py --data_root <DATA> --enqueue_baseline
     CUDA_VISIBLE_DEVICES=1 python scripts/tune_optuna.py --data_root <DATA>
@@ -29,6 +34,7 @@ import argparse
 import copy
 import csv
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -48,7 +54,10 @@ from src.common.metrics import evaluate_batch_per_image
 from src.common.gennet import reseed_noise, set_noise_scale
 
 BASE_ARCH = "a29_gan_decnoise"
-OUT_DIR = PROJECT_ROOT / "results" / "optuna"
+HDD_RESULTS = Path("/DATA1/shrusti/genai_project/results")
+DEFAULT_RESULTS = Path(os.environ.get("GENAI_RESULTS_ROOT")
+                       or (HDD_RESULTS if HDD_RESULTS.is_dir() else PROJECT_ROOT / "results"))
+OUT_DIR = DEFAULT_RESULTS / "optuna"      # set from --results_root in main()
 BASELINE = {"lr": 4e-4, "disc_lr_ratio": 1.0, "adv_weight": 0.005, "div_target": 1.5,
             "ssim_weight": 0.2}
 
@@ -56,8 +65,11 @@ BASELINE = {"lr": 4e-4, "disc_lr_ratio": 1.0, "adv_weight": 0.005, "div_target":
 def parse_args():
     p = argparse.ArgumentParser(description="Optuna tuning of a29_gan_decnoise.")
     p.add_argument("--data_root", default=str(PROJECT_ROOT / "data"))
+    p.add_argument("--results_root", default=str(DEFAULT_RESULTS),
+                   help="Study and trial log go to <results_root>/optuna (default: the HDD results folder).")
     p.add_argument("--study_name", default="a29_tune")
-    p.add_argument("--storage", default=f"sqlite:///{OUT_DIR / 'a29_tune.db'}")
+    p.add_argument("--storage", default=None,
+                   help="Optuna storage URL (default: sqlite:///<results_root>/optuna/<study_name>.db).")
     p.add_argument("--n_trials", type=int, default=40, help="Total cap over all workers.")
     p.add_argument("--timeout_hours", type=float, default=14.0, help="Per worker.")
     p.add_argument("--trial_steps", type=int, default=10000)
@@ -144,7 +156,7 @@ class Objective:
         sub = torch.utils.data.Subset(ds, subset_indices(ds))
         self.val_loader = torch.utils.data.DataLoader(sub, batch_size=16, shuffle=False, num_workers=4)
         OUT_DIR.mkdir(parents=True, exist_ok=True)
-        self.log_path = OUT_DIR / "trials.csv"
+        self.log_path = OUT_DIR / f"trials_{args.study_name}.csv"
 
     def _trial_cfg(self, hp):
         cfg = apply_params(copy.deepcopy(self.base_cfg), hp)
@@ -253,7 +265,13 @@ def summary(study):
 
 
 def main():
+    global OUT_DIR
     args = parse_args()
+    OUT_DIR = Path(args.results_root) / "optuna"
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    if args.storage is None:
+        args.storage = f"sqlite:///{OUT_DIR / (args.study_name + '.db')}"
+    print(f"[tune] study {args.study_name} at {args.storage}; trial log {OUT_DIR / ('trials_' + args.study_name + '.csv')}", flush=True)
     study = load_study(args)
     if args.summary:
         return summary(study)

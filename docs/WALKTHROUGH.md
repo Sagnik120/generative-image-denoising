@@ -20,7 +20,7 @@ The schedule reaches its plateau, so 80 epochs is not stopping the model early. 
   - **Pruner:** successive halving; checks at 2.5k and 5k steps, so weak trials stop after ~20–40 minutes.
   - **Score:** `J = PSNR + 20·SSIM − 20·DISTS` on a 132-image subset of benchmark v1 (4 per case: 2 natural, 1 low-light, 1 medical), **at noise ×0.5**.
   - **Fails a trial if:** diversity < 0.6 (16 images × 4 seeds), final sample spread > 3× the diversity target (a27_full's failure), or the losses keep going non-finite.
-  - **Outputs:** an SQLite study shared by the two workers (`results/optuna/a29_tune.db`) and one row per trial in `results/optuna/trials.csv`.
+  - **Outputs (on the HDD, not in the repo):** an SQLite study shared by the two workers (`/DATA1/shrusti/genai_project/results/optuna/a29_tune.db`) and one row per trial in `/DATA1/shrusti/genai_project/results/optuna/trials_a29_tune.csv`. The results root defaults to `/DATA1/shrusti/genai_project/results` when that folder exists; `--results_root` or the `GENAI_RESULTS_ROOT` variable override it.
   - `--summary` prints the top 10 trials. `--write_configs` writes the phase-B and final configs from the best trial.
 - `src/common/gan.py`: `gan.disc_lr_ratio` (discriminator learning rate = ratio × generator learning rate; default 1.0, so every earlier model is unchanged).
 - New configs, all a29's network:
@@ -67,32 +67,36 @@ git push origin main
 cd <repo on the GPU machine>
 git pull origin main
 pip install "optuna>=3.4"
+export R=/DATA1/shrusti/genai_project/results          # all results stay on the HDD
+mkdir -p $R/optuna
 ```
+
+Every command below writes to `$R`: `tune_optuna.py` by default (and with `--results_root $R` to be explicit), and `run_all.py` through `--results_root $R`. Nothing new is created inside the code folder.
 
 The run log of round 7 shows our GPUs as **0 and 2**; check with `nvidia-smi` and use the free ones below.
 
 **Step 0: smoke test (~5–10 min, separate study, nothing kept).** 2 tiny trials of 60 steps on real data:
 
 ```
-CUDA_VISIBLE_DEVICES=0 python scripts/tune_optuna.py --data_root <DATA> --smoke --n_trials 2 --enqueue_baseline --study_name smoke --storage sqlite:///results/optuna/smoke.db
+CUDA_VISIBLE_DEVICES=0 python scripts/tune_optuna.py --data_root <DATA> --results_root $R --smoke --n_trials 2 --enqueue_baseline --study_name smoke
 ```
 
-It must print `step 20` / `step 40` lines with J, PSNR, SSIM, DISTS, diversity for 2 trials, then a summary. Then: `rm results/optuna/smoke.db results/optuna/trials.csv`.
+It must print `step 20` / `step 40` lines with J, PSNR, SSIM, DISTS, diversity for 2 trials, then a summary. Then: `rm $R/optuna/smoke.db $R/optuna/trials_smoke.csv`.
 
 **Step 1: Optuna search (phase A, ~14 h), two workers on one study.** Start worker 1 a minute after worker 0 (worker 0 queues the baseline as trial 0):
 
 ```
-CUDA_VISIBLE_DEVICES=0 nohup python scripts/tune_optuna.py --data_root <DATA> --enqueue_baseline > tune_w0.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0 nohup python scripts/tune_optuna.py --data_root <DATA> --results_root $R --enqueue_baseline > $R/optuna/tune_w0.log 2>&1 &
 sleep 60
-CUDA_VISIBLE_DEVICES=2 nohup python scripts/tune_optuna.py --data_root <DATA> > tune_w1.log 2>&1 &
+CUDA_VISIBLE_DEVICES=2 nohup python scripts/tune_optuna.py --data_root <DATA> --results_root $R > $R/optuna/tune_w1.log 2>&1 &
 ```
 
 While it runs:
 
 ```
-tail -f tune_w0.log tune_w1.log
-column -s, -t < results/optuna/trials.csv
-python scripts/tune_optuna.py --summary
+tail -f $R/optuna/tune_w0.log $R/optuna/tune_w1.log
+column -s, -t < $R/optuna/trials_a29_tune.csv
+python scripts/tune_optuna.py --results_root $R --summary
 nvidia-smi
 ```
 
@@ -101,18 +105,18 @@ Both workers stop by themselves after 40 trials in total or 14 h. Check: trial 0
 **Step 2: write the configs from the best trial, then confirm at 30k (phase B, ~4.5 h).**
 
 ```
-python scripts/tune_optuna.py --summary
-python scripts/tune_optuna.py --write_configs
+python scripts/tune_optuna.py --results_root $R --summary
+python scripts/tune_optuna.py --results_root $R --write_configs
 head -2 src/architectures/a29_tuned/config.yaml        # shows the tuned values
-nohup python scripts/run_all.py --data_root <DATA> --archs a29_tuned_30k a29_base_30k > run_round8_phaseB.log 2>&1 &
+nohup python scripts/run_all.py --data_root <DATA> --results_root $R --archs a29_tuned_30k a29_base_30k > $R/run_round8_phaseB.log 2>&1 &
 ```
 
-Send me `run_round8_phaseB.log` and the `--summary` output. **Decision (by me, same hour):** the final run uses the tuned setting only if `a29_tuned_30k` beats `a29_base_30k` by ≥ 0.1 in J at noise ×0.5, with diversity ≥ 0.6 and a stable spread. Otherwise no final run: a29 is final.
+Send me `$R/run_round8_phaseB.log` and the `--summary` output. **Decision (by me, same hour):** the final run uses the tuned setting only if `a29_tuned_30k` beats `a29_base_30k` by ≥ 0.1 in J at noise ×0.5, with diversity ≥ 0.6 and a stable spread. Otherwise no final run: a29 is final.
 
 **Step 3: final run, 80 epochs (~21–27 h).**
 
 ```
-nohup python scripts/run_all.py --data_root <DATA> --archs a29_tuned > run_round8_final.log 2>&1 &
+nohup python scripts/run_all.py --data_root <DATA> --results_root $R --archs a29_tuned > $R/run_round8_final.log 2>&1 &
 ```
 
 It trains, evaluates (v1, v2, v3), runs the generative evaluation (noise ×0.5–1.5) and exports, like every earlier run. The second GPU is free during this run.
@@ -131,7 +135,7 @@ At the current machine speed (~1220 s per 2.5k steps).
 
 Data loading: each worker uses 8 CPU data workers + 4 for the subset (as in round 7).
 
-Disk: the Optuna study keeps no checkpoints (~1 MB). Phase B and the final run: ~0.3 GB each.
+Disk (all on the HDD, `/DATA1/shrusti/genai_project/results`): the Optuna study keeps no checkpoints (~1 MB + logs). Phase B and the final run: ~0.3 GB each.
 
 ## 5. Schedule
 
@@ -147,6 +151,6 @@ Fallbacks: a29 (trained, current final), then a25_full.
 
 ## 6. What to send back
 
-- After phase A: `python scripts/tune_optuna.py --summary` output and `results/optuna/trials.csv`.
-- After phase B: `run_round8_phaseB.log`.
-- After the final run: `run_round8_final.log`, and for `a29_tuned`: `metrics/final_evaluation_summary.json`, `metrics/generative_eval.json`, `logs/training_log.csv`, `visualizations/epoch_0080_comparison.png`.
+- After phase A: `python scripts/tune_optuna.py --results_root $R --summary` output and `$R/optuna/trials_a29_tune.csv`.
+- After phase B: `$R/run_round8_phaseB.log`.
+- After the final run: `$R/run_round8_final.log`, and for `a29_tuned` (in `$R/a29_tuned/`): `metrics/final_evaluation_summary.json`, `metrics/generative_eval.json`, `logs/training_log.csv`, `visualizations/epoch_0080_comparison.png`.
