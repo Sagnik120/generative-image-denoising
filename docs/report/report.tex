@@ -8,6 +8,7 @@
 \usepackage{microtype}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
+\usepackage{graphicx}
 \usepackage{tabularx}
 \usepackage{array}
 \usepackage{enumitem}
@@ -36,7 +37,7 @@
   \end{tabular}\\[6pt]
   \begin{tabular}{@{}r@{\hspace{0.6em}}l@{}}
     \textbf{Course:}  & Foundation Models and Generative AI \\
-    \textbf{Faculty:} & Angshuman Paul \\
+    \textbf{Faculty:} & Dr.\ Angshuman Paul \\
   \end{tabular}
 \end{center}
 \vspace{-6pt}
@@ -181,6 +182,11 @@ Model & PSNR (dB) $\uparrow$ & SSIM $\uparrow$ & DISTS $\downarrow$ & GFLOPs (fv
 \end{tabular}\\[2pt]
 {\footnotesize $^{*}$Mean per-pixel standard deviation (grey levels, 0--255) of the uint8 outputs
 over 8 noise seeds, on 96 benchmark images.}
+\end{center}
+\begin{center}
+\includegraphics[width=\linewidth]{results_samples.png}\\[1pt]
+{\footnotesize Benchmark examples (left three: underwater scene; right three: street scene), each shown as
+corrupted input $\mid$ output of the submitted model $\mid$ clean ground truth.}
 \end{center}
 
 \end{document}
