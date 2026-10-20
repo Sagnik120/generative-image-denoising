@@ -1,11 +1,15 @@
 """
 Inference for the generative denoiser.
 
+Python:
     from inference import denoise_image
     clean = denoise_image(corrupted)          # (256, 256, 3) uint8 -> (256, 256, 3) uint8
 
-Command line:
-    python inference.py --input corrupted.png --output denoised.png [--seed 0]
+Command line, one image:
+    python inference.py --input corrupted.png --output denoised.png
+
+Command line, a folder of images (every image in it, same file names in the output folder):
+    python inference.py --input corrupted_dir/ --output denoised_dir/
 
 `load_model()` returns the torch.nn.Module used for inference (input/output:
 float tensor (1, 3, 256, 256) in [0, 1]); pass it to fvcore / ptflops to
@@ -13,6 +17,7 @@ measure FLOPs. The noise is drawn inside its forward pass.
 """
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +31,7 @@ WEIGHTS_PATH = THIS_DIR / "model_weights.pt"
 CONFIG_PATH = THIS_DIR / "config.json"
 NOISE_SCALE = 0.75          # test-time noise multiplier used for the submission
 IMAGE_SIZE = 256
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 
 _model, _device = None, None
 
@@ -69,12 +75,69 @@ def denoise_image(corrupted, seed=None):
     return (out * 255.0).round().astype(np.uint8)
 
 
+def read_rgb(path):
+    """Reads any image as a (H, W, 3) uint8 RGB array (greyscale/RGBA are converted)."""
+    return np.array(Image.open(path).convert("RGB"))
+
+
+def save_image(array, path):
+    """Saves a uint8 RGB array. PNG/BMP/TIFF are lossless; JPEG/WebP outputs are
+    saved at the highest quality (they stay lossy, so prefer PNG inputs or --png)."""
+    path = Path(path)
+    ext = path.suffix.lower()
+    if ext in (".jpg", ".jpeg"):
+        Image.fromarray(array).save(path, quality=100, subsampling=0)
+    elif ext == ".webp":
+        Image.fromarray(array).save(path, lossless=True)
+    else:
+        Image.fromarray(array).save(path)
+
+
+def denoise_file(src, dst, seed=None):
+    image = read_rgb(src)
+    if image.shape != (IMAGE_SIZE, IMAGE_SIZE, 3):
+        raise ValueError(f"{src}: expected a 256x256 RGB image, got {image.shape[1]}x{image.shape[0]}")
+    out = denoise_image(image, seed=seed)
+    save_image(out, dst)
+    return out
+
+
+def denoise_folder(src_dir, dst_dir, seed=None, force_png=False):
+    """Denoises every image in src_dir (not recursive) into dst_dir with the same
+    file name (with --png the extension becomes .png). Returns (done, failed)."""
+    src_dir, dst_dir = Path(src_dir), Path(dst_dir)
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    files = sorted(p for p in src_dir.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
+    if not files:
+        raise SystemExit(f"no images ({', '.join(sorted(IMAGE_EXTENSIONS))}) found in {src_dir}")
+    done, failed = 0, []
+    for i, src in enumerate(files, 1):
+        dst = dst_dir / (src.stem + ".png" if force_png else src.name)
+        try:
+            denoise_file(src, dst, seed=seed)
+            done += 1
+        except Exception as e:                      # keep going; report at the end
+            failed.append((src.name, str(e)))
+        if i % 50 == 0 or i == len(files):
+            print(f"[{i}/{len(files)}] {src.name} -> {dst}", flush=True)
+    print(f"done: {done} image(s) written to {dst_dir}" + (f"; {len(failed)} failed" if failed else ""))
+    for name, err in failed:
+        print(f"  FAILED {name}: {err}", file=sys.stderr)
+    return done, failed
+
+
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(description="Denoise one 256x256 RGB image.")
-    p.add_argument("--input", required=True)
-    p.add_argument("--output", required=True)
-    p.add_argument("--seed", type=int, default=None)
+    p = argparse.ArgumentParser(description="Denoise one 256x256 RGB image or a folder of them.")
+    p.add_argument("--input", required=True, help="an image file, or a folder of images")
+    p.add_argument("--output", required=True,
+                   help="output image file (for a file input) or output folder (for a folder input)")
+    p.add_argument("--seed", type=int, default=None, help="fixed noise seed for a reproducible output")
+    p.add_argument("--png", action="store_true",
+                   help="folder mode: always write .png (same name, lossless) instead of the input's extension")
     args = p.parse_args()
-    image = np.array(Image.open(args.input).convert("RGB"))
-    Image.fromarray(denoise_image(image, seed=args.seed)).save(args.output)
+    src = Path(args.input)
+    if src.is_dir():
+        _, failed = denoise_folder(src, args.output, seed=args.seed, force_png=args.png)
+        sys.exit(1 if failed else 0)
+    denoise_file(src, args.output, seed=args.seed)
     print(f"saved {args.output}")

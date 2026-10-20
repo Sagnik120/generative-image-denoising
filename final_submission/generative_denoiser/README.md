@@ -19,10 +19,23 @@ corrupted = np.array(Image.open("corrupted.png").convert("RGB"))   # (256, 256, 
 denoised = denoise_image(corrupted)                                 # (256, 256, 3) uint8
 Image.fromarray(denoised).save("denoised.png")
 ```
-Command line:
+Command line, one image:
 ```bash
 python inference.py --input corrupted.png --output denoised.png
 ```
+Command line, **a folder of images**: every image in the folder is denoised and written to the output folder **under the same file name**, so each output can be matched to its input:
+```bash
+python inference.py --input corrupted_images/ --output denoised_images/
+# corrupted_images/0001.png -> denoised_images/0001.png, corrupted_images/xray_12.jpg -> denoised_images/xray_12.jpg
+```
+- Supported inputs: `.png .jpg .jpeg .bmp .tif .tiff .webp`. Other files are skipped. Greyscale or RGBA images are converted to RGB.
+- Every output is a **256×256×3 uint8 RGB** image, the same size as its input. Images that are not 256×256 are reported by name and skipped; the others are still processed. The exit code is 1 if any image failed.
+- **Output format:**
+  - PNG, BMP and TIFF outputs are lossless.
+  - JPEG outputs are saved at quality 100 (still lossy); WebP outputs are saved lossless.
+  - Add `--png` to write every output as a lossless `.png` with the same base name.
+- Add `--seed 0` for a reproducible output.
+
 Run from inside this folder (or add it to `PYTHONPATH`). A GPU is used if available; on CPU one image takes well under a second.
 
 **Generative sampling.** The generator injects Gaussian noise inside the network, so each call returns a new sample of the restored image (mean per-pixel standard deviation between samples ≈ 0.8 grey levels). For a reproducible output pass a seed: `denoise_image(corrupted, seed=0)` or `--seed 0`.
@@ -33,7 +46,7 @@ Run from inside this folder (or add it to `PYTHONPATH`). A GPU is used if availa
 | `model_weights.pt` | trained generator weights, PyTorch `state_dict` (exponential moving average of the training weights) |
 | `config.json` | network size settings |
 | `model.py` | the network (NAF U-Net with gated noise injection in the decoder) |
-| `inference.py` | `load_model()`, `denoise_image()`, command line |
+| `inference.py` | `load_model()`, `denoise_image()`, command line for one image or a folder of images |
 | `requirements.txt` | `torch`, `numpy`, `Pillow`; `fvcore` / `ptflops` only to measure FLOPs |
 | `training/` | full training and evaluation code, to retrain the model from scratch (see below) |
 
@@ -91,7 +104,14 @@ python scripts/train.py --arch generative_denoiser --data_root <DATA>   # 200k s
 python scripts/evaluate.py --arch generative_denoiser --data_root <DATA> --noise_scale 0.75
 python scripts/eval_generative.py --arch generative_denoiser --data_root <DATA>
 ```
-All hyperparameters are in `src/architectures/generative_denoiser/config.yaml`. The trained generator weights (`checkpoints/best_model.pt`, key `ema`) are what `model_weights.pt` contains.
+All hyperparameters are in `src/architectures/generative_denoiser/config.yaml`.
+
+The inference package uses the EMA generator weights of the best checkpoint. To use a model you trained yourself, export them (from `training/`):
+```bash
+python -c "import torch; torch.save(torch.load('results/generative_denoiser/checkpoints/best_model.pt', map_location='cpu')['ema'], '../model_weights.pt')"
+```
+
+**Why `model.py` / `config.json` sit next to `inference.py` and not only in `training/`:** inference has to run with just `torch`, `numpy` and `Pillow`, and must be measured for FLOPs as one small module. `model.py` is a standalone copy of the generator from `training/src/common/gennet.py`: same layers and parameter names, no training code, and it loads the same weights. `training/` is only needed to retrain.
 
 ## Results on our held-out benchmark
 396 images (natural, low-light, medical), 33 corruption cases (single, pairs, triples); uint8 images, skimage PSNR/SSIM, official DISTS-pytorch.
