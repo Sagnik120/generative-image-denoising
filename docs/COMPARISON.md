@@ -1,4 +1,6 @@
-# Model comparison (a05–a29)
+# Model comparison (a05–a29_tuned)
+
+> **Update 2026-10-20 (final):** round 8 done. **Final model: a29_tuned (Optuna trial 32) at noise ×0.75: 32.74 / 0.8740 / 0.1371 at 4.98 GFLOPs, diversity 0.77**: −0.37 dB from the regression a19, equal SSIM, best `unseen_v2` of all models. See §13.
 
 > **Update 2026-10-18:** round 7 done. **a29_gan_decnoise is the final architecture: 32.27 / 0.8682 / 0.1360 at noise ×0.5, diversity 0.86, 4.98 GFLOPs**: −0.84 dB from the regression a19. It beats a25_full and a27_full on all three quality metrics at their best eligible noise scales. See §12.
 
@@ -370,3 +372,52 @@ With noise in all 18 blocks and only a lower bound on diversity, a27_full drifte
 1. **a29 is the final architecture**: best at its submission setting on PSNR, SSIM and DISTS, eligible with margin (0.86), and the only one of the two whose 200k training is reproducible.
 2. **Its weaknesses are not clearly hyperparameter-shaped** (structured cases, unseen families), so expect tuning to give +0.1–0.3 dB in total, not to close the 0.84 dB gap.
 3. **Noise ×0.5** is the submission setting unless tuning changes the trade-off.
+
+## 13. Round 8: tuned final runs (a29_tuned, a29_tuned_b) and the final choice
+
+Source: `run_round8_final.log`, `results/<model>/`. Both 200k steps, data v3, a29 network; hyperparameters from Optuna trials 32 and 37 (`HYPERPARAMETER_TUNING.md` §5).
+
+### 13.1 Candidates at their best eligible noise scale (diversity ≥ 0.6)
+
+| Model | Scale | PSNR | SSIM | DISTS | Diversity | unseen_v2 (×1) | Rank PSNR / SSIM / DISTS |
+|---|---|---|---|---|---|---|---|
+| **a29_tuned** | ×0.6 | **32.817** | **0.8744** | 0.1377 | 0.640 | **32.15** | 1 / 1 / 3 |
+| **a29_tuned (chosen)** | **×0.75** | 32.741 | 0.8740 | 0.1371 | **0.772** | **32.15** | 1 / 1 / 3 |
+| a29_tuned_b | ×1 | 32.601 | 0.8697 | **0.1340** | 0.649 | 31.93 | 2 / 2 / 1 |
+| a29 | ×0.5 | 32.269 | 0.8682 | 0.1360 | 0.86 | 30.91 | 3 / 3 / 2 |
+| a19 (regression, not allowed) | – | 33.112 | 0.8743 | 0.1293 | 0 | 31.88 | – |
+
+Average rank (PSNR, SSIM, DISTS): a29_tuned 1.67, a29_tuned_b 1.67, a29 2.67. **Tie-break (`PLAN.md` rule): better `unseen_v2` → a29_tuned** (32.15 vs 31.93). a29_tuned also wins on low-light (37.64 vs 37.43) and has the larger generative margin; a29_tuned_b wins on medical (34.83 vs 34.49) and DISTS.
+
+### 13.2 Why noise ×0.75 and not ×0.6
+
+×0.6 is +0.08 dB, +0.0004 SSIM but +0.0006 DISTS and only 0.04 above the diversity bar (0.640). The brief requires a generative model, and our diversity is measured on 96 of our own images, so the private set may sit lower. ×0.75 keeps 0.77 (29% margin) for −0.08 dB. It still beats a29_tuned_b at ×1 on PSNR (+0.14) and SSIM (+0.004).
+
+### 13.3 What tuning changed (a29_tuned vs a29, same network, data and steps)
+
+| | a29 | a29_tuned | Δ |
+|---|---|---|---|
+| PSNR at eligible scale | 32.27 (×0.5) | 32.74 (×0.75) | +0.47 |
+| PSNR at ×1 | 31.93 | 32.61 | +0.69 |
+| SSIM at eligible scale | 0.8682 | 0.8740 | +0.006 |
+| DISTS at eligible scale | 0.1360 | 0.1371 | +0.001 |
+| `unseen_v2` (×1) | 30.91 | 32.15 | **+1.24** |
+| PSNR after epoch 40 | fell 0.15 dB | **rose 0.24 dB** | |
+
+The higher learning rate (7.55e-4) and lower adversarial weight (0.00275) let the model keep improving fidelity while the DISTS loss acts; a29's PSNR declined in that phase.
+
+### 13.4 Whole project: what each stage was worth (submittable setting, benchmark v1)
+
+| Stage | Model | PSNR | SSIM | DISTS | Step |
+|---|---|---|---|---|---|
+| first eligible GAN (60k) | a25 | 30.93 | 0.8372 | 0.1674 | – |
+| long training (200k) | a25_full | 32.02 | 0.8576 | 0.1399 | +1.09 dB |
+| per-sample loss, data v3, gated decoder noise | a29 | 32.27 | 0.8682 | 0.1360 | +0.25 dB |
+| Optuna tuning | **a29_tuned** | **32.74** | **0.8740** | 0.1371 | +0.47 dB |
+| regression reference (not allowed) | a19 | 33.11 | 0.8743 | 0.1293 | gap −0.37 dB |
+
+### 13.5 Conclusions
+
+1. **Final model: a29_tuned at noise ×0.75**: 32.74 dB / 0.8740 / 0.1371, 4.98 GFLOPs, diversity 0.77.
+2. It is within 0.37 dB and 0.0003 SSIM of the best non-generative model we trained, and better than it on unseen families.
+3. Remaining weaknesses for the report: `resize_blur` below its input, structured artifacts 2–3 dB behind a19, DISTS 0.008 behind a19.

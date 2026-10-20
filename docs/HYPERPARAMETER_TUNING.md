@@ -141,6 +141,20 @@ Study `a29_tune` (`/DATA1/shrusti/genai_project/results/optuna/`, `trials_a29_tu
 
 ---
 
+### 5.4 Outcome of the 200k runs (10-20)
+
+| Run | Trial | ×1 PSNR / SSIM / DISTS | Diversity ×1 / ×0.75 / ×0.5 | Best eligible setting |
+|---|---|---|---|---|
+| a29 (baseline setting) | 0 | 31.93 / 0.8655 / 0.1346 | 1.40 / 1.17 / 0.86 | ×0.5: 32.27 / 0.8682 / 0.1360 |
+| **a29_tuned** | **32** | 32.61 / 0.8733 / 0.1364 | 0.97 / **0.77** / 0.55 | **×0.75: 32.74 / 0.8740 / 0.1371 (final)** |
+| a29_tuned_b | 37 | 32.60 / 0.8697 / 0.1340 | 0.65 / 0.52 / 0.38 | ×1: 32.60 / 0.8697 / 0.1340 |
+
+- **The 10k-step gain carried over to 200k:** +0.5 dB at 10k, +0.69 dB at ×1 and +0.47 dB at the eligible scale after 200k. The short-horizon risk did not materialise for these settings.
+- **Choosing the safer trial was right:** trial 37 (best J at 10k) ended with the same PSNR but diversity only 0.65 at ×1. Its lower diversity target (1.37) and stronger discriminator cut the generative margin; trial 32's target 1.60 kept 0.97 at ×1.
+- **Tuning lowered diversity at equal noise scale** (a29 ×0.5: 0.86 → a29_tuned 0.55), so the final noise scale moved from ×0.5 to ×0.75.
+
+---
+
 ## 6. Sources
 
 - Akiba et al., "Optuna: A Next-generation Hyperparameter Optimization Framework", KDD 2019.

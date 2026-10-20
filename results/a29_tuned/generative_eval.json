@@ -1,0 +1,53 @@
+{
+  "architecture": "a29_tuned",
+  "checkpoint": "/DATA1/shrusti/genai_project/results/a29_tuned/checkpoints/best_model.pt",
+  "seeds": 8,
+  "results": [
+    {
+      "steps": 1,
+      "noise_scale": 1.0,
+      "psnr": 32.61275468259959,
+      "ssim": 0.8733211564251363,
+      "dists": 0.13642132402670504,
+      "diversity": 0.9737238089243571,
+      "gflops": 4.982022144
+    },
+    {
+      "steps": 1,
+      "noise_scale": 0.5,
+      "psnr": 32.86427765996351,
+      "ssim": 0.8746321959398313,
+      "dists": 0.1381239216737073,
+      "diversity": 0.5480097283919653,
+      "gflops": 4.982022144
+    },
+    {
+      "steps": 1,
+      "noise_scale": 0.6,
+      "psnr": 32.81721929220587,
+      "ssim": 0.8744058764094002,
+      "dists": 0.13770251141654122,
+      "diversity": 0.6404551515976588,
+      "gflops": 4.982022144
+    },
+    {
+      "steps": 1,
+      "noise_scale": 0.75,
+      "psnr": 32.74117316422113,
+      "ssim": 0.8740312532650122,
+      "dists": 0.13710907568233183,
+      "diversity": 0.772344688574473,
+      "gflops": 4.982022144
+    },
+    {
+      "steps": 1,
+      "noise_scale": 1.5,
+      "psnr": 32.37305313519247,
+      "ssim": 0.8716723188866992,
+      "dists": 0.13670732667951874,
+      "diversity": 1.310041457414627,
+      "gflops": 4.982022144
+    }
+  ],
+  "mean_noise_strength": 0.11052903383970261
+}

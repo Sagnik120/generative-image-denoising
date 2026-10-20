@@ -1,16 +1,19 @@
 # Current status
 
-Last updated 2026-10-19 (after the Optuna search). Next steps: `PLAN.md` §6. Tuning results: `HYPERPARAMETER_TUNING.md` §5. Model numbers: `COMPARISON.md` §12.
+Last updated 2026-10-20 (final). Next steps: `PLAN.md` (submission). Model numbers: `COMPARISON.md` §13.
 
 ## 1. Summary
 
-- **Final architecture: a29_gan_decnoise.** At noise ×0.5: 32.27 dB / 0.8682 / 0.1360 at 4.98 GFLOPs, diversity 0.86. Trained and ready as the fallback submission.
-- **Optuna search done** (10-18; 38 trials: 15 complete, 14 pruned, 9 failed on diversity).
-  - The top settings beat the a29 setting by about +1.0 in J at 10k steps (+0.5 dB, +0.014 SSIM, −0.017 DISTS).
-  - The gain comes mostly from a **higher learning rate (~7.5e-4)** and a **lower adversarial weight (~0.003)**.
-  - The diversity target must stay ≳ 1.33.
-- **Decision:** train **trial 32** (lr 7.55e-4, D/G ratio 0.5, adversarial 0.00275, diversity target 1.60, SSIM weight 0.334) directly for **80 epochs** as `a29_tuned` (GPU 0), and trial 37 as `a29_tuned_b` (GPU 1) in parallel, both to the full 80 epochs (no early stopping). The 30k confirmation is skipped for time; a29 guards against a worse result.
-- **10-20:** final choice among a29 / a29_tuned (/ a29_tuned_b), export, report, submission by 23:59.
+- **Final model: a29_tuned** (Optuna trial 32), submitted at **noise ×0.75**: **32.74 dB / 0.8740 SSIM / 0.1371 DISTS at 4.98 GFLOPs, diversity 0.77 grey levels.**
+  - Conditional GAN: NAF U-Net generator with gated noise in the decoder; wavelet-domain discriminator.
+  - Data v3; 200k steps; lr 7.55e-4, adversarial 0.00275, diversity target 1.60, SSIM weight 0.334, D/G lr ratio 0.5.
+- **vs the regression a19 (not allowed):** −0.37 dB, −0.0003 SSIM, +0.008 DISTS. **Better than a19 on unseen corruption families** (`unseen_v2` 32.15 vs 31.88).
+- **a29_tuned_b (trial 37)** has the same quality class and the best DISTS (0.1340), but diversity only 0.65 at ×1 and below 0.6 at lower scales. Not chosen.
+- **Remaining for 10-20:**
+  - breakdown at ×0.75 for the report;
+  - export with the noise scale built in (small code step: `--noise_scale` in `export_inference.py`);
+  - FLOPs with fvcore and ptflops, CPU test, diversity samples;
+  - 1–2 page report; submission by 23:59.
 
 ## 2. The brief, line by line
 
@@ -44,12 +47,13 @@ Every statement in `Mini Competition.pdf` that constrains us, and where we stand
 | | a10 residual flow, 2 steps | flow-style, **deterministic** | 30.35 dB, −1.6 dB vs a05, worst DISTS |
 | 3 (single changes on a05) | a12–a14 size, a15 degradations v2, a16 attention, a17–a18 DISTS weighting | regression | only v2 data accepted |
 | Final | a19 = a15 config, 200k steps | regression | 33.11 dB / 0.8743 / 0.1293 at 4.98 GFLOPs; best of all, **not compliant** |
+| 8 | a29_tuned, a29_tuned_b (Optuna trials 32, 37; 200k) | **strictly generative, eligible** | **a29_tuned ×0.75: 32.74 / 0.8740 / 0.1371 (FINAL)**; a29_tuned_b diversity margin too thin |
 | 7 | a27_full, a29 (200k, data v3) | **strictly generative, eligible** | **a29: 32.27 / 0.8682 / 0.1360 at ×0.5 (final architecture)**; a27_full unstable |
 | 6 | a25_full (200k), a27 full per-sample loss + diversity constraint, a28 two-phase | **strictly generative, eligible** | a25_full 32.02 / 0.8576 / 0.1399 (best compliant); a27 +0.47 dB over a25 at 60k |
 | 5 (60k, v2, 8 images × 2 draws) | a24 GAN + stochastic recipe, a25 + wavelet D, a26 diffusion + GAN | **strictly generative, eligible** | diversity 1.5–1.8; −0.9 to −1.0 dB vs round-4 twins; best a25 30.93 dB |
 | 4 (60k, v2 data, from scratch) | a20 GAN, a21 GAN + wavelet D, a22 residual diffusion 1 step, a23 residual diffusion w16 2 steps | **strictly generative by design** | GANs −0.15/−0.23 dB vs a15 but noise ignored; a22 −0.52 dB, diversity 0.50; a23 −2.1 dB. None satisfactory yet |
 
-31 configurations; 16 were regression models. The generative requirement was recorded as a question for the instructor in both earlier status files and never treated as a constraint. That was the error, and it is why the best result is unusable as it stands.
+33 trained configurations (+ 38 Optuna trials); 16 were regression models. The generative requirement was recorded as a question for the instructor in both earlier status files and never treated as a constraint. That was the error, and it is why the best result is unusable as it stands.
 
 ## 4. What the earlier generative attempts actually tell us
 
@@ -101,21 +105,23 @@ Benchmark v1 (mean input PSNR 24.49 dB) and the `unseen_v2` group of benchmark v
 | a27 (60k) | full per-sample loss + diversity constraint | 31.24 (×1) / 31.39 (×0.5) | 0.8489 | 0.1601 | 4.98 | 30.45 |
 | a28 (60k) | a27, adversarial from 50% | 31.15 / 31.45 | 0.8511 | 0.1582 | 4.98 | 30.17 |
 | a27_full (200k, v3) | noise in all blocks; unstable late | 32.18 (×0.6) | 0.8659 | 0.1444 | 4.98 | 31.42 |
-| **a29 (200k, v3)** | **decoder-only gated noise; final architecture** | **32.27 (×0.5)** | **0.8682** | **0.1360** | 4.98 | 30.91 |
+| a29 (200k, v3) | decoder-only gated noise; final architecture | 32.27 (×0.5) | 0.8682 | 0.1360 | 4.98 | 30.91 |
+| **a29_tuned (200k, v3, trial 32)** | **FINAL MODEL, noise ×0.75, diversity 0.77** | **32.74** | **0.8740** | **0.1371** | 4.98 | **32.15** |
+| a29_tuned_b (trial 37) | diversity 0.65 at ×1 only | 32.60 (×1) | 0.8697 | 0.1340 | 4.98 | 31.93 |
 
 Target for the generative model: as close to a19 as possible on PSNR/SSIM, equal or better on DISTS, at ≤5 GFLOPs in one step.
 
 ## 7. Risks
 
-1. **Tuning gains are uncertain and small** (+0.1–0.3 dB expected); short trials may not transfer to 200k. The 30k confirmation and the rule "the tuned run must beat a29" protect the result.
-2. **Time:** the tuned 200k run takes ~25 h at the current machine speed. It must start by 10-19 ~08:00. If it is late or worse, a29 is submitted.
-3. **Unseen families** (`unseen_v2` 30.91) are a29's weakest point relative to a27_full; the private set "may contain other types".
-4. **Our benchmark is in-distribution** and the private set is ~100 images.
+1. **Diversity on the private set** may differ from ours; ×0.75 keeps a 29% margin over 0.6.
+2. **FLOPs counting:** fvcore gives 4.98 GFLOPs; ptflops may count the NAF gates differently. Both are reported.
+3. **Our benchmark is in-distribution**; the private set is ~100 images, so small differences may reverse.
+4. **Deadline today (23:59):** export and report must be done in order (`PLAN.md` §4).
 
 ## 8. Checklist
 
-- [x] Rounds 4–7; final architecture a29 (32.27 / 0.8682 / 0.1360, ×0.5)
-- [x] Optuna script + smoke test; Optuna search (10-18, 38 trials); trial 32 chosen
-- [ ] Configs for trials 32 (and 37); tuned 80-epoch run(s) (10-19 → 10-20 ~12:00)
-- [ ] Final choice; export with fresh noise per call; fvcore + ptflops; CPU test; diversity samples (10-20)
-- [ ] 1–2 page report; submission by 10-20 23:59
+- [x] Rounds 4–8; Optuna search; final model a29_tuned at ×0.75 (32.74 / 0.8740 / 0.1371)
+- [ ] Breakdown at ×0.75 (`evaluate.py --noise_scale 0.75`)
+- [ ] Export with noise ×0.75 built in, fresh noise per call, uint8 output; package verified
+- [ ] FLOPs: fvcore + ptflops on (1, 3, 256, 256); CPU test from a clean checkout; diversity samples
+- [ ] 1–2 page report (architecture, training objective, degradations); submission package; submit by 23:59

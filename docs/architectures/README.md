@@ -93,3 +93,11 @@ Same network, data and losses as a29; only the five tuned values differ (learnin
 | a29_base_30k | phase-B baseline: unchanged a29 setting | 30k (12 epochs) |
 | a29_tuned_30k | phase B: best Optuna setting | 30k (12 epochs) |
 | a29_tuned | final run with the best setting (if phase B passes) | 200k (80 epochs) |
+
+### Round 8 results
+
+| # | File | Optuna trial | Chosen scale | PSNR | SSIM | DISTS | Diversity | GFLOPs | Verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 29T | [a29_tuned](a29_tuned.md) | 32 | **×0.75** | **32.741** | **0.8740** | 0.1371 | 0.77 | 4.98 | **FINAL MODEL** |
+| 29Tb | [a29_tuned_b](a29_tuned_b.md) | 37 | ×1 (only eligible) | 32.601 | 0.8697 | **0.1340** | 0.65 | 4.98 | thin diversity margin; not chosen |
+| 29 | [a29_gan_decnoise](a29_gan_decnoise.md) | (a29 setting) | ×0.5 | 32.269 | 0.8682 | 0.1360 | 0.86 | 4.98 | previous final |
