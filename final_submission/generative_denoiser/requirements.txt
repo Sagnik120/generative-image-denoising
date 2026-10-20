@@ -1,0 +1,6 @@
+torch>=2.0
+numpy
+Pillow
+# only to measure FLOPs:
+fvcore
+ptflops

@@ -1,0 +1,8 @@
+{
+  "width": 24,
+  "enc_blocks": [2, 2, 2, 4],
+  "middle_blocks": 3,
+  "dec_blocks": [1, 1, 1, 2],
+  "image_size": 256,
+  "noise_gate": true
+}
