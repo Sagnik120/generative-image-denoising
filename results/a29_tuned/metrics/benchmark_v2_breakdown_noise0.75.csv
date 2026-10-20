@@ -1,0 +1,15 @@
+level,name,n,input_psnr,psnr,ssim,dists
+overall,all,96,25.879,33.8121,0.8734,0.14
+group,unseen_v2,60,23.823,32.2091,0.8296,0.1776
+group,plan,36,29.304,36.4837,0.9465,0.0773
+domain,natural,48,24.079,30.2792,0.8576,0.1347
+domain,lowlight,24,29.792,40.291,0.8874,0.1693
+domain,medical,24,25.565,34.3988,0.891,0.1212
+case,film_grain,12,25.091,28.4952,0.707,0.2316
+case,glass_blur,12,31.395,31.6276,0.8739,0.2255
+case,line_dropout,12,19.686,40.0818,0.9794,0.0559
+case,glass_blur+film_grain,12,23.738,26.4684,0.6496,0.2698
+case,line_dropout+jpeg,12,19.209,34.3725,0.9379,0.105
+case,sensor_noise,12,24.253,35.1579,0.9256,0.0929
+case,ringing,12,29.006,38.4225,0.9822,0.0401
+case,double_jpeg,12,34.654,35.8707,0.9318,0.0988

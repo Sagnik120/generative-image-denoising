@@ -1,0 +1,246 @@
+"""
+Conditional GAN training for round 4 (a20, a21).
+
+Generator: src/common/gennet.py::GenNet. Discriminator (training only, so it
+adds no inference FLOPs): the U-Net discriminator with spectral
+normalisation from Real-ESRGAN (Wang et al. 2021), which scores every pixel
+real/fake. It is conditional (pix2pix): it always sees the corrupted input
+next to the candidate, so it judges "the right restoration of this input".
+
+disc_input:
+  rgb     - candidate and corrupted image, 6 channels at 256px.
+  wavelet - the three high-frequency Haar bands of each, 18 channels at
+            128px (Korkmaz et al., CVPR 2024): noise, blur and compression
+            artifacts live in those bands. Colour/brightness errors are left
+            to the reconstruction losses.
+
+Generator loss = composite loss (Charbonnier + FFT + SSIM + DISTS)
+                 + wavelet_weight * L1 on Haar bands
+                 + adv_weight * hinge adversarial term (ramped in from step 0).
+Discriminator loss = hinge + lazy R1 gradient penalty.
+
+Round 5 "stochastic recipe" (train.stochastic, off when absent): round 4
+showed the composite loss punishes output variance, so the GANs switched
+their noise off. With `samples: 2` every image of the batch is restored with
+two noise draws x1, x2 and
+  - the composite loss is applied to their mean (halves the variance penalty);
+  - `per_sample_charb` * Charbonnier keeps each single sample anchored;
+  - `div_weight` * max(0, div_target/255 - mean|x1 - x2|) pushes the samples
+    apart until they differ by ~div_target grey levels, then stops
+    (diversity-sensitive cGAN, Yang et al. 2019 / Mao et al. 2019, with a target);
+  - the adversarial term and the discriminator see every sample.
+The loader batch is the number of IMAGES; the generator sees batch * samples.
+Subclasses change the generator pass by overriding `generate` (a26).
+
+Round 6 "pair" mode (train.stochastic.pair_images > 0; replaces `samples`):
+round 5 lost ~1 dB because the loss on the mean weakened each sample's
+reconstruction signal. Here every output gets the full composite loss (as
+a20), the batch keeps all its images, and only the first `pair_images`
+images get a second noise draw; the diversity hinge on those pairs is the
+constraint that keeps the noise in use. `gan.adv_start_frac` > 0 switches the
+adversarial term (and discriminator training) on only from that fraction of
+training (a28: reconstruction warm-up with the diversity constraint, then
+adversarial training, as SRGAN / ESRGAN / Real-ESRGAN).
+"""
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn.utils import spectral_norm
+
+from .bundle import RestorationBundle, _grad_scaler
+from .layers import haar_dwt
+
+
+def wavelet_l1(pred, target):
+    """L1 distance between the Haar sub-bands of two image batches."""
+    return (haar_dwt(pred.float()) - haar_dwt(target.float())).abs().mean()
+
+
+class UNetDiscriminatorSN(nn.Module):
+    def __init__(self, in_ch=6, feat=32):
+        super().__init__()
+        sn = spectral_norm
+        self.conv0 = nn.Conv2d(in_ch, feat, 3, 1, 1)
+        self.conv1 = sn(nn.Conv2d(feat, feat * 2, 4, 2, 1, bias=False))
+        self.conv2 = sn(nn.Conv2d(feat * 2, feat * 4, 4, 2, 1, bias=False))
+        self.conv3 = sn(nn.Conv2d(feat * 4, feat * 8, 4, 2, 1, bias=False))
+        self.conv4 = sn(nn.Conv2d(feat * 8, feat * 4, 3, 1, 1, bias=False))
+        self.conv5 = sn(nn.Conv2d(feat * 4, feat * 2, 3, 1, 1, bias=False))
+        self.conv6 = sn(nn.Conv2d(feat * 2, feat, 3, 1, 1, bias=False))
+        self.conv7 = sn(nn.Conv2d(feat, feat, 3, 1, 1, bias=False))
+        self.conv8 = sn(nn.Conv2d(feat, feat, 3, 1, 1, bias=False))
+        self.conv9 = nn.Conv2d(feat, 1, 3, 1, 1)
+
+    def forward(self, x):
+        act = lambda t: F.leaky_relu(t, 0.2)
+        up = lambda t: F.interpolate(t, scale_factor=2, mode="bilinear", align_corners=False)
+        x0 = act(self.conv0(x))
+        x1 = act(self.conv1(x0))
+        x2 = act(self.conv2(x1))
+        x3 = act(self.conv3(x2))
+        x4 = act(self.conv4(up(x3))) + x2
+        x5 = act(self.conv5(up(x4))) + x1
+        x6 = act(self.conv6(up(x5))) + x0
+        out = act(self.conv7(x6))
+        out = act(self.conv8(out))
+        return self.conv9(out)
+
+
+class GANBundle(RestorationBundle):
+    def __init__(self, cfg, device, model, name="gan"):
+        super().__init__(cfg, device, model, name=name)
+        t = cfg["train"]
+        g = dict(t.get("gan") or {})
+        self.adv_weight = g.get("adv_weight", 0.005)
+        self.ramp_steps = max(1, g.get("ramp_steps", 5000))
+        self.r1_gamma = g.get("r1_gamma", 1.0)
+        self.r1_every = g.get("r1_every", 16)
+        self.adv_start = int(g.get("adv_start_frac", 0.0) * self.total_steps)
+        self.disc_lr_ratio = g.get("disc_lr_ratio", 1.0)   # TTUR: discriminator lr = ratio x generator lr
+        self.disc_input = g.get("disc_input", "rgb")
+        self.wavelet_weight = t.get("wavelet_weight", 0.0)
+        st = dict(t.get("stochastic") or {})
+        self.samples = max(1, int(st.get("samples", 1)))
+        self.per_sample_charb = st.get("per_sample_charb", 0.0)
+        self.div_target = st.get("div_target", 0.0) / 255.0
+        self.div_weight = st.get("div_weight", 0.0)
+        self.pair_images = int(st.get("pair_images", 0))
+        if self.pair_images > 0:
+            self.samples = 1
+        in_ch = 18 if self.disc_input == "wavelet" else 6
+        self.disc = UNetDiscriminatorSN(in_ch, g.get("disc_feat", 32)).to(device)
+        self.opt_d = torch.optim.AdamW(self.disc.parameters(), lr=self.base_lr,
+                                       betas=(0.9, 0.99), weight_decay=0.0)
+        self.scaler_d = _grad_scaler(self.use_amp)
+        print(f"[{name}] discriminator: {self.disc_input}, "
+              f"{sum(p.numel() for p in self.disc.parameters()):,} parameters "
+              f"(training only)")
+
+    def _d_in(self, image, corrupted):
+        image = image.to(corrupted.dtype) if image.dtype != corrupted.dtype else image
+        if self.disc_input == "wavelet":
+            return torch.cat([haar_dwt(image)[:, 3:], haar_dwt(corrupted)[:, 3:]], dim=1)
+        return torch.cat([image, corrupted], dim=1)
+
+    def generate(self, corrupted, clean):
+        """Generator pass used in training (clean is used by diffusion subclasses)."""
+        return self.model(corrupted)
+
+    def _disc_step(self, clean, corrupted, fake, amp):
+        with torch.autocast(**amp):
+            d_real = self.disc(self._d_in(clean, corrupted))
+            d_fake = self.disc(self._d_in(fake, corrupted))
+        loss_d = F.relu(1.0 - d_real.float()).mean() + F.relu(1.0 + d_fake.float()).mean()
+        if self.r1_gamma > 0 and self.step % self.r1_every == 0:
+            real_in = self._d_in(clean, corrupted).float().detach().requires_grad_(True)
+            with torch.autocast(device_type="cuda", enabled=False):
+                score = self.disc(real_in).float().mean(dim=(1, 2, 3)).sum()
+            grad, = torch.autograd.grad(score, real_in, create_graph=True)
+            loss_d = loss_d + 0.5 * self.r1_gamma * self.r1_every * \
+                grad.pow(2).sum(dim=(1, 2, 3)).mean()
+        if torch.isfinite(loss_d):
+            self.scaler_d.scale(loss_d).backward()
+            self.scaler_d.step(self.opt_d)
+            self.scaler_d.update()
+        return loss_d
+
+    def train_step(self, corrupted, clean, labels=None):
+        self.model.train()
+        self.disc.train()
+        lr = self._lr_at(self.step)
+        for group in self.optimizer.param_groups:
+            group["lr"] = lr
+        for group in self.opt_d.param_groups:
+            group["lr"] = lr * self.disc_lr_ratio
+        target, n_img = clean, corrupted.shape[0]
+        k = min(self.pair_images, n_img)
+        if k > 0:            # round 6: second noise draw for the first k images only
+            corrupted = torch.cat([corrupted, corrupted[:k]])
+            clean = target = torch.cat([clean, clean[:k]])
+        elif self.samples > 1:
+            corrupted = corrupted.repeat(self.samples, 1, 1, 1)
+            clean = clean.repeat(self.samples, 1, 1, 1)
+        if self.on_cuda:
+            corrupted = corrupted.contiguous(memory_format=torch.channels_last)
+        amp = dict(device_type="cuda", dtype=torch.float16, enabled=self.use_amp)
+
+        with torch.autocast(**amp):
+            pred = self.generate(corrupted, clean)
+        fake = pred.detach().float().clamp(0, 1)
+        adv_on = self.step >= self.adv_start
+
+        # ---- discriminator (only once the adversarial phase has started) ----
+        self.opt_d.zero_grad(set_to_none=True)
+        loss_d = self._disc_step(clean, corrupted, fake, amp) if adv_on \
+            else torch.zeros((), device=fake.device)
+
+        # ---- generator ----
+        self.optimizer.zero_grad(set_to_none=True)
+        for p in self.disc.parameters():
+            p.requires_grad_(False)
+        try:
+            adv = torch.zeros((), device=fake.device)
+            if adv_on:
+                with torch.autocast(**amp):
+                    adv = -self.disc(self._d_in(pred, corrupted)).float().mean()
+            progress = self.step / self.total_steps
+            if k > 0:
+                # full composite loss on every output; diversity hinge on the k pairs
+                recon = pred
+                loss, parts = self.criterion(pred, clean, progress)
+                spread = (pred[:k].float() - pred[n_img:].float()).abs().mean()
+                if self.div_weight > 0:
+                    loss = loss + self.div_weight * F.relu(self.div_target - spread)
+                parts["spread255"] = spread.item() * 255.0
+            elif self.samples > 1:
+                draws = pred.float().chunk(self.samples)
+                recon = sum(draws) / self.samples
+                loss, parts = self.criterion(recon, target, progress)
+                if self.per_sample_charb > 0:
+                    per = self.criterion.pix(pred.float(), clean)
+                    loss = loss + self.per_sample_charb * per
+                    parts["pix_sample"] = per.item()
+                spread = (draws[0] - draws[1]).abs().mean()
+                if self.div_weight > 0:
+                    loss = loss + self.div_weight * F.relu(self.div_target - spread)
+                parts["spread255"] = spread.item() * 255.0
+            else:
+                recon = pred
+                loss, parts = self.criterion(pred, clean, progress)
+            if self.wavelet_weight > 0:
+                parts["wave"] = wavelet_l1(recon, target)
+                loss = loss + self.wavelet_weight * parts["wave"]
+                parts["wave"] = parts["wave"].item()
+            if adv_on:
+                ramp = min(1.0, (self.step - self.adv_start + 1) / self.ramp_steps)
+                loss = loss + self.adv_weight * ramp * adv
+            if not torch.isfinite(loss):
+                return self._skip_step()
+            self.scaler.scale(loss).backward()
+            self.scaler.unscale_(self.optimizer)
+            grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                       max_norm=self.grad_clip)
+            if not torch.isfinite(grad_norm):
+                self.scaler.update()
+                return self._skip_step()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        finally:
+            for p in self.disc.parameters():
+                p.requires_grad_(True)
+        self.step += 1
+        self._update_ema()
+        return {"loss": loss.item(), **parts, "gen_loss": adv.item(),
+                "disc_loss": loss_d.item()}
+
+    def state_dict(self):
+        state = super().state_dict()
+        state.update(disc=self.disc.state_dict(), opt_d=self.opt_d.state_dict())
+        return state
+
+    def load_state_dict(self, state):
+        super().load_state_dict(state)
+        if "disc" in state:
+            self.disc.load_state_dict(state["disc"])
+        if "opt_d" in state:
+            self.opt_d.load_state_dict(state["opt_d"])

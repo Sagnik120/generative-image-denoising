@@ -1,0 +1,579 @@
+"""
+Synthetic degradation pipeline.
+
+The brief (Section 3.2 / 4) asks for a model that removes many KINDS of
+corruption and many COMBINATIONS of them, including kinds that are not
+disclosed. This file is where that is decided, so it is organised around
+three ideas:
+
+  1. Every degradation takes a severity `s` in [0, 1] and an explicit numpy
+     Generator. Severity makes "mild / medium / severe" a controllable axis
+     (used by the fixed benchmark); the explicit Generator makes every
+     DataLoader worker draw different corruptions (numpy's global RNG is
+     copied into each forked worker, which silently repeats the same noise).
+
+  2. Three family lists:
+       LISTED_FAMILIES  - the nine named in the brief.
+       EXTRA_FAMILIES   - further corruptions we also train on, so the model
+                          sees more than the disclosed list.
+       UNSEEN_FAMILIES  - NEVER used in training by the default ("v1")
+                          pipeline; only the benchmark applies them, to
+                          measure generalisation to unknown types.
+     The "v2" pipeline (round 3) also trains on PLAN_FAMILIES, which include
+     two of the v1 unseen families, so it is tested on UNSEEN_V2_FAMILIES
+     (benchmark v2) instead.
+
+  3. `RandomDegradation` builds a chain of 0-4 families per image, applied
+     in the order a camera would produce them (optics -> blur -> noise ->
+     compression), with a fraction of chains shuffled so the model does not
+     depend on one order. It also returns a label vector saying which
+     families were applied and how severely.
+
+All functions take and return float32 HWC arrays in [0, 1].
+"""
+import io
+
+import numpy as np
+import cv2
+from PIL import Image
+
+
+def _clip(img):
+    return np.clip(img, 0.0, 1.0).astype(np.float32)
+
+
+def _lerp(lo, hi, s):
+    return lo + (hi - lo) * float(s)
+
+
+def _to_uint8(img):
+    return (np.clip(img, 0.0, 1.0) * 255.0).round().astype(np.uint8)
+
+
+def quantize_uint8(img):
+    """Snap to the uint8 grid: the model's real input is always a uint8 image."""
+    return _to_uint8(img).astype(np.float32) / 255.0
+
+
+# ------------------------- noise family ------------------------- #
+
+def add_gaussian_noise(img, s, rng):
+    sigma = _lerp(2, 55, s) / 255.0
+    shape = img.shape[:2] + (1,) if rng.random() < 0.25 else img.shape   # 25%: same noise on all channels
+    return _clip(img + rng.normal(0, sigma, shape).astype(np.float32))
+
+
+def add_poisson_noise(img, s, rng):
+    peak = 10 ** _lerp(3.0, 0.7, s)          # photons at white: 1000 (mild) -> 5 (severe)
+    return _clip(rng.poisson(img * peak) / peak)
+
+
+def add_salt_and_pepper(img, s, rng):
+    amount = _lerp(0.002, 0.20, s)
+    salt_frac = rng.uniform(0.3, 0.7)
+    shape = img.shape if rng.random() < 0.5 else img.shape[:2] + (1,)    # per-channel or whole-pixel
+    u = np.broadcast_to(rng.random(shape), img.shape)
+    out = img.copy()
+    out[u < amount * salt_frac] = 1.0
+    out[(u >= amount * salt_frac) & (u < amount)] = 0.0
+    return out
+
+
+def add_speckle_noise(img, s, rng):
+    sigma = _lerp(0.03, 0.45, s)
+    return _clip(img + img * rng.normal(0, sigma, img.shape).astype(np.float32))
+
+
+# ------------------------- blur family ------------------------- #
+
+def _filter(img, kernel):
+    return cv2.filter2D(img, -1, kernel, borderType=cv2.BORDER_REFLECT)
+
+
+def apply_gaussian_blur(img, s, rng):
+    sigma = _lerp(0.4, 4.0, s)
+    if rng.random() < 0.7:
+        return _clip(cv2.GaussianBlur(img, (0, 0), sigma, borderType=cv2.BORDER_REFLECT))
+    # Anisotropic, rotated Gaussian.
+    sx, sy = sigma, sigma * rng.uniform(0.3, 0.8)
+    theta = rng.uniform(0, np.pi)
+    r = int(np.ceil(3 * sigma))
+    y, x = np.mgrid[-r:r + 1, -r:r + 1].astype(np.float32)
+    xr = x * np.cos(theta) + y * np.sin(theta)
+    yr = -x * np.sin(theta) + y * np.cos(theta)
+    kernel = np.exp(-0.5 * ((xr / sx) ** 2 + (yr / sy) ** 2))
+    return _clip(_filter(img, (kernel / kernel.sum()).astype(np.float32)))
+
+
+def _line_kernel(length, angle_deg):
+    ksize = int(np.ceil(length)) | 1
+    kernel = np.zeros((ksize, ksize), dtype=np.float32)
+    kernel[ksize // 2, :] = 1.0
+    M = cv2.getRotationMatrix2D((ksize / 2 - 0.5, ksize / 2 - 0.5), angle_deg, 1.0)
+    kernel = cv2.warpAffine(kernel, M, (ksize, ksize))
+    return kernel / max(kernel.sum(), 1e-8)
+
+
+def _trajectory_kernel(length, rng):
+    """Camera-shake style kernel: a random curved path instead of a straight line."""
+    n = max(int(length * 4), 8)
+    angles = rng.uniform(0, 2 * np.pi) + np.cumsum(rng.normal(0, 0.18, n))
+    step = length / n
+    xs = np.cumsum(step * np.cos(angles))
+    ys = np.cumsum(step * np.sin(angles))
+    xs -= (xs.max() + xs.min()) / 2
+    ys -= (ys.max() + ys.min()) / 2
+    r = int(np.ceil(max(np.abs(xs).max(), np.abs(ys).max()))) + 1
+    kernel = np.zeros((2 * r + 1, 2 * r + 1), dtype=np.float32)
+    np.add.at(kernel, (np.round(ys).astype(int) + r, np.round(xs).astype(int) + r), 1.0)
+    return kernel / kernel.sum()
+
+
+def apply_motion_blur(img, s, rng):
+    length = _lerp(3, 25, s)
+    if rng.random() < 0.7:
+        kernel = _line_kernel(length, rng.uniform(0, 180))
+    else:
+        kernel = _trajectory_kernel(length, rng)
+    return _clip(_filter(img, kernel))
+
+
+def apply_defocus_blur(img, s, rng):
+    radius = _lerp(0.8, 8.0, s)
+    r = int(np.ceil(radius)) + 1
+    y, x = np.mgrid[-r:r + 1, -r:r + 1].astype(np.float32)
+    kernel = np.clip(radius + 0.5 - np.sqrt(x ** 2 + y ** 2), 0.0, 1.0)   # soft-edged disk
+    return _clip(_filter(img, (kernel / kernel.sum()).astype(np.float32)))
+
+
+# ------------------------- compression / colour ------------------------- #
+
+def _pil_roundtrip(img, fmt, **save_kwargs):
+    buf = io.BytesIO()
+    Image.fromarray(_to_uint8(img)).save(buf, format=fmt, **save_kwargs)
+    buf.seek(0)
+    return np.asarray(Image.open(buf).convert("RGB"), dtype=np.float32) / 255.0
+
+
+def apply_jpeg_compression(img, s, rng):
+    quality = int(round(_lerp(95, 8, s)))
+    return _pil_roundtrip(img, "JPEG", quality=quality, subsampling=int(rng.choice([0, 1, 2])))
+
+
+def apply_chromatic_aberration(img, s, rng):
+    """Shifts and slightly rescales the red and blue planes against green."""
+    h, w = img.shape[:2]
+    max_shift = _lerp(0.5, 6.0, s)
+    out = img.copy()
+    radial = rng.random() < 0.5
+    for ch, sign in ((0, 1.0), (2, -1.0)):
+        ang = rng.uniform(0, 2 * np.pi)
+        mag = rng.uniform(0.4, 1.0) * max_shift
+        scale = 1.0 + sign * mag / (w / 2) if radial else 1.0
+        tx = 0.0 if radial else mag * np.cos(ang)
+        ty = 0.0 if radial else mag * np.sin(ang)
+        M = np.float32([[scale, 0, tx + (1 - scale) * w / 2],
+                        [0, scale, ty + (1 - scale) * h / 2]])
+        out[..., ch] = cv2.warpAffine(img[..., ch], M, (w, h), flags=cv2.INTER_LINEAR,
+                                      borderMode=cv2.BORDER_REFLECT)
+    return _clip(out)
+
+
+# ------------------------- extra families (trained on) ------------------------- #
+
+def add_correlated_noise(img, s, rng):
+    """Spatially correlated (blotchy) noise, as left by demosaicing / denoisers."""
+    sigma = _lerp(2, 45, s) / 255.0
+    noise = rng.normal(0, 1, img.shape).astype(np.float32)
+    noise = cv2.GaussianBlur(noise, (0, 0), rng.uniform(0.6, 1.6))
+    return _clip(img + sigma * noise / max(noise.std(), 1e-6))
+
+
+def add_random_impulse(img, s, rng):
+    """Random-valued impulse noise: corrupted pixels take arbitrary values."""
+    amount = _lerp(0.002, 0.15, s)
+    mask = rng.random(img.shape[:2]) < amount
+    out = img.copy()
+    out[mask] = rng.random((int(mask.sum()), img.shape[2])).astype(np.float32)
+    return out
+
+
+def add_rician_noise(img, s, rng):
+    """Magnitude-MRI noise: Gaussian noise on real and imaginary parts."""
+    sigma = _lerp(2, 40, s) / 255.0
+    n1 = rng.normal(0, sigma, img.shape[:2] + (1,)).astype(np.float32)
+    n2 = rng.normal(0, sigma, img.shape[:2] + (1,)).astype(np.float32)
+    return _clip(np.sqrt((img + n1) ** 2 + n2 ** 2))
+
+
+def add_stripe_noise(img, s, rng):
+    """Row / column fixed-pattern noise, or smooth sinusoidal banding."""
+    h, w = img.shape[:2]
+    rows = rng.random() < 0.5
+    n = h if rows else w
+    if rng.random() < 0.7:
+        line = rng.normal(0, _lerp(1, 25, s) / 255.0, n)
+    else:
+        line = _lerp(0.01, 0.08, s) * np.sin(np.linspace(0, rng.uniform(6, 40) * np.pi, n) + rng.uniform(0, 6.28))
+    line = line.astype(np.float32)
+    offset = line[:, None, None] if rows else line[None, :, None]
+    return _clip(img + offset)
+
+
+def apply_resize_blur(img, s, rng):
+    """Down- then up-sampling: the softness of an image that was once smaller."""
+    h, w = img.shape[:2]
+    factor = _lerp(1.2, 4.0, s)
+    down = [cv2.INTER_AREA, cv2.INTER_LINEAR, cv2.INTER_CUBIC][rng.integers(3)]
+    up = [cv2.INTER_LINEAR, cv2.INTER_CUBIC][rng.integers(2)]
+    small = cv2.resize(img, (max(8, int(w / factor)), max(8, int(h / factor))), interpolation=down)
+    return _clip(cv2.resize(small, (w, h), interpolation=up))
+
+
+def apply_webp_compression(img, s, rng):
+    try:
+        return _pil_roundtrip(img, "WEBP", quality=int(round(_lerp(90, 5, s))))
+    except Exception:          # Pillow built without WebP: fall back to JPEG
+        return apply_jpeg_compression(img, s, rng)
+
+
+def apply_quantization(img, s, rng):
+    """Posterisation: fewer intensity levels (6 bits down to 3)."""
+    levels = 2 ** int(round(_lerp(6, 3, s))) - 1
+    return _clip(np.round(img * levels) / levels)
+
+
+def add_small_artifacts(img, s, rng):
+    """Scratches, dead-pixel clusters and tiny blocks ("small artifacts" in the brief)."""
+    h, w = img.shape[:2]
+    out = np.ascontiguousarray(img.copy())
+    for _ in range(int(round(_lerp(1, 24, s)))):
+        kind = rng.integers(3)
+        colour = [(1.0,) * 3, (0.0,) * 3, tuple(float(v) for v in rng.random(3))][rng.integers(3)]
+        x, y = int(rng.integers(w)), int(rng.integers(h))
+        if kind == 0:
+            ang, length = rng.uniform(0, 2 * np.pi), rng.uniform(6, 90)
+            end = (int(x + length * np.cos(ang)), int(y + length * np.sin(ang)))
+            cv2.line(out, (x, y), end, colour, 1, lineType=cv2.LINE_AA)
+        elif kind == 1:
+            cv2.circle(out, (x, y), int(rng.integers(1, 3)), colour, -1)
+        else:
+            bw, bh = int(rng.integers(2, 9)), int(rng.integers(2, 9))
+            out[y:y + bh, x:x + bw] = colour
+    return _clip(out)
+
+
+# ------------------------- unseen families (benchmark only) ------------------------- #
+
+def add_uniform_noise(img, s, rng):
+    a = _lerp(4, 80, s) / 255.0
+    return _clip(img + rng.uniform(-a, a, img.shape).astype(np.float32))
+
+
+def apply_pixelate(img, s, rng):
+    h, w = img.shape[:2]
+    factor = _lerp(1.5, 5.0, s)
+    small = cv2.resize(img, (max(8, int(w / factor)), max(8, int(h / factor))), interpolation=cv2.INTER_AREA)
+    return _clip(cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST))
+
+
+def add_periodic_noise(img, s, rng):
+    """A diagonal 2D sinusoid (interference / moire-like pattern)."""
+    h, w = img.shape[:2]
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    freq, ang = rng.uniform(0.03, 0.25), rng.uniform(0, np.pi)
+    wave = np.sin(2 * np.pi * freq * (x * np.cos(ang) + y * np.sin(ang)) + rng.uniform(0, 6.28))
+    return _clip(img + _lerp(0.01, 0.12, s) * wave[..., None])
+
+
+# ------------------------- v2 training families (round 3) ------------------------- #
+
+def add_sensor_noise(img, s, rng):
+    """Camera-sensor noise: shot noise with a per-channel gain plus read noise."""
+    gain = rng.uniform(0.7, 1.3, size=3).astype(np.float32)
+    shot = _lerp(0.002, 0.03, s) * gain
+    read = _lerp(0.002, 0.04, s) * float(rng.uniform(0.5, 1.5))
+    sigma = np.sqrt(np.maximum(img, 0.0) * shot + read ** 2).astype(np.float32)
+    return _clip(img + rng.standard_normal(img.shape).astype(np.float32) * sigma)
+
+
+def apply_ringing(img, s, rng):
+    """Over-sharpening halos (an unsharp mask with a large gain)."""
+    blur = cv2.GaussianBlur(img, (0, 0), float(rng.uniform(0.8, 2.5)))
+    return _clip(img + _lerp(0.3, 2.5, s) * (img - blur))
+
+
+def apply_double_jpeg(img, s, rng):
+    """Two JPEG passes with the 8x8 block grid shifted in between."""
+    dy, dx = int(rng.integers(1, 8)), int(rng.integers(1, 8))
+    out = np.roll(apply_jpeg_compression(img, s, rng), (dy, dx), axis=(0, 1))
+    out = apply_jpeg_compression(out, float(rng.uniform(0.0, s)), rng)
+    return np.ascontiguousarray(np.roll(out, (-dy, -dx), axis=(0, 1)))
+
+
+# ------------------------- v3 training families (round 7) ------------------------- #
+# Artifacts typical of the private set's domains that v2 does not cover.
+
+def apply_demosaic_artifacts(img, s, rng):
+    """Bayer (RGGB) sampling + bilinear demosaicing: colour fringes and zipper
+    edges of camera pipelines; mild sensor noise is added before demosaicing."""
+    h, w = img.shape[:2]
+    raw = np.zeros((h, w), np.float32)
+    raw[0::2, 0::2] = img[0::2, 0::2, 0]
+    raw[0::2, 1::2] = img[0::2, 1::2, 1]
+    raw[1::2, 0::2] = img[1::2, 0::2, 1]
+    raw[1::2, 1::2] = img[1::2, 1::2, 2]
+    raw = raw + rng.normal(0, _lerp(0.0, 0.02, s), raw.shape).astype(np.float32)
+    bayer = (np.clip(raw, 0, 1) * 255.0).round().astype(np.uint8)
+    rgb = cv2.cvtColor(bayer, cv2.COLOR_BayerBG2RGB).astype(np.float32) / 255.0
+    return _clip(rgb)
+
+
+def add_chroma_noise(img, s, rng):
+    """Low-frequency colour blotches of low-light cameras: noise in the colour
+    channels only (luminance kept), blurred to blotches of a few pixels."""
+    amp = _lerp(0.01, 0.06, s)
+    noise = rng.normal(0, 1, img.shape[:2] + (2,)).astype(np.float32)
+    noise = cv2.GaussianBlur(noise, (0, 0), rng.uniform(2.0, 4.0))
+    noise = amp * noise / max(float(noise.std()), 1e-6)
+    cb, cr = noise[..., 0], noise[..., 1]
+    # zero-luminance colour offsets (BT.601 weights)
+    d = np.stack([1.402 * cr, -0.344 * cb - 0.714 * cr, 1.772 * cb], axis=-1)
+    return _clip(img + d)
+
+
+def add_mri_ghosting(img, s, rng):
+    """Phase-encode motion ghosts: faint shifted replicas along one axis."""
+    axis = int(rng.integers(0, 2))
+    out = img.copy()
+    for _ in range(int(rng.integers(1, 4))):
+        shift = int(rng.integers(8, 41)) * (1 if rng.random() < 0.5 else -1)
+        out = out + _lerp(0.05, 0.25, s) * rng.uniform(0.5, 1.0) * (np.roll(img, shift, axis=axis) - img)
+    return _clip(out)
+
+
+def add_ct_ring_artifact(img, s, rng):
+    """CT detector-miscalibration rings: concentric rings around a random centre."""
+    h, w = img.shape[:2]
+    cy, cx = rng.uniform(0.3, 0.7) * h, rng.uniform(0.3, 0.7) * w
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    r = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+    spacing = rng.uniform(3.0, 10.0)
+    n_rings = int(np.ceil(r.max() / spacing)) + 1
+    ring_amp = rng.normal(0, 1, n_rings).astype(np.float32) * (rng.random(n_rings) < 0.5)
+    rings = ring_amp[np.minimum((r / spacing).astype(int), n_rings - 1)]
+    rings = cv2.GaussianBlur(rings, (0, 0), 0.7)
+    return _clip(img + _lerp(0.01, 0.06, s) * rings[..., None])
+
+
+# ------------------------- unseen families for benchmark v2 ------------------------- #
+
+def add_film_grain(img, s, rng):
+    """Grain coarser than pixel noise, shared by the channels, stronger in the shadows."""
+    h, w = img.shape[:2]
+    grain = cv2.GaussianBlur(rng.standard_normal((h, w)).astype(np.float32), (0, 0),
+                             float(rng.uniform(0.6, 1.4)))
+    grain /= float(grain.std()) + 1e-6
+    luma = img.mean(axis=2, keepdims=True)
+    return _clip(img + _lerp(0.02, 0.15, s) * grain[..., None] * (0.3 + 0.7 * (1.0 - luma)))
+
+
+def apply_glass_blur(img, s, rng):
+    """Frosted glass: every pixel is read from a random nearby position."""
+    h, w = img.shape[:2]
+    d = _lerp(0.6, 2.5, s)
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    map_x = x + rng.uniform(-d, d, (h, w)).astype(np.float32)
+    map_y = y + rng.uniform(-d, d, (h, w)).astype(np.float32)
+    out = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+    return _clip(cv2.GaussianBlur(out, (0, 0), 0.5))
+
+
+def add_line_dropout(img, s, rng):
+    """Dead (black) or saturated (white) scan lines, along rows or columns."""
+    out = img.copy()
+    axis = int(rng.random() < 0.5)
+    lines = rng.random(out.shape[axis]) < _lerp(0.005, 0.08, s)
+    value = rng.choice([0.0, 1.0], size=int(lines.sum())).astype(np.float32)
+    if axis == 0:
+        out[lines] = value[:, None, None]
+    else:
+        out[:, lines] = value[None, :, None]
+    return out
+
+
+# ------------------------- registry ------------------------- #
+
+# name -> (function, group, position in the physical chain)
+FAMILIES = {
+    "chromatic_aberration": (apply_chromatic_aberration, "colour", 0),
+    "gaussian_blur":        (apply_gaussian_blur,        "blur", 1),
+    "motion_blur":          (apply_motion_blur,          "blur", 1),
+    "defocus_blur":         (apply_defocus_blur,         "blur", 1),
+    "resize_blur":          (apply_resize_blur,          "blur", 1),
+    "pixelate":             (apply_pixelate,             "blur", 1),
+    "poisson_noise":        (add_poisson_noise,          "noise", 2),
+    "speckle_noise":        (add_speckle_noise,          "noise", 2),
+    "gaussian_noise":       (add_gaussian_noise,         "noise", 3),
+    "correlated_noise":     (add_correlated_noise,       "noise", 3),
+    "rician_noise":         (add_rician_noise,           "noise", 3),
+    "uniform_noise":        (add_uniform_noise,          "noise", 3),
+    "stripe_noise":         (add_stripe_noise,           "noise", 3),
+    "periodic_noise":       (add_periodic_noise,         "noise", 3),
+    "salt_pepper":          (add_salt_and_pepper,        "impulse", 4),
+    "random_impulse":       (add_random_impulse,         "impulse", 4),
+    "small_artifacts":      (add_small_artifacts,        "artifact", 4),
+    "quantization":         (apply_quantization,         "compression_like", 5),
+    "jpeg":                 (apply_jpeg_compression,     "compression", 6),
+    "webp":                 (apply_webp_compression,     "compression", 6),
+    # round 3
+    "ringing":              (apply_ringing,              "sharpen", 1),
+    "glass_blur":           (apply_glass_blur,           "blur", 1),
+    "sensor_noise":         (add_sensor_noise,           "noise", 2),
+    "film_grain":           (add_film_grain,             "noise", 3),
+    "line_dropout":         (add_line_dropout,           "impulse", 4),
+    "double_jpeg":          (apply_double_jpeg,          "compression", 6),
+    # round 7 (v3)
+    "demosaic_artifacts":   (apply_demosaic_artifacts,   "sensor", 2),
+    "chroma_noise":         (add_chroma_noise,           "noise", 3),
+    "mri_ghosting":         (add_mri_ghosting,           "artifact", 4),
+    "ct_ring_artifact":     (add_ct_ring_artifact,       "artifact", 4),
+}
+
+LISTED_FAMILIES = ["gaussian_noise", "poisson_noise", "salt_pepper", "speckle_noise",
+                   "gaussian_blur", "motion_blur", "defocus_blur", "jpeg",
+                   "chromatic_aberration"]
+EXTRA_FAMILIES = ["correlated_noise", "random_impulse", "rician_noise", "stripe_noise",
+                  "resize_blur", "webp", "quantization", "small_artifacts"]
+UNSEEN_FAMILIES = ["uniform_noise", "pixelate", "periodic_noise"]
+
+TRAIN_FAMILIES = LISTED_FAMILIES + EXTRA_FAMILIES
+NUM_TRAIN_FAMILIES = len(TRAIN_FAMILIES)
+
+# Round 3: the "v2" training pipeline adds these to EXTRA_FAMILIES. Two of
+# them are v1's unseen families, so v2 models are tested on a new unseen set.
+PLAN_FAMILIES = ["pixelate", "periodic_noise", "sensor_noise", "ringing", "double_jpeg"]
+UNSEEN_V2_FAMILIES = ["film_grain", "glass_blur", "line_dropout"]
+# Round 7: "v3" adds artifacts of the private set's domains (camera, MRI, CT).
+# The v2 unseen families stay out of training, so `unseen_v2` remains a test
+# of generalisation.
+V3_FAMILIES = ["demosaic_artifacts", "chroma_noise", "mri_ghosting", "ct_ring_artifact"]
+EXTRA_FAMILY_SETS = {"v1": EXTRA_FAMILIES, "v2": EXTRA_FAMILIES + PLAN_FAMILIES,
+                     "v3": EXTRA_FAMILIES + PLAN_FAMILIES + V3_FAMILIES}
+
+# At most this many families from one group in a single chain (two different
+# blurs or two codecs stacked just destroy the image without teaching anything).
+_GROUP_LIMIT = {"blur": 1, "compression": 1, "noise": 2, "impulse": 1}
+
+
+def apply_recipe(img, recipe, rng, shuffle=False):
+    """Applies [(family_name, severity), ...] and returns the uint8-quantised result."""
+    steps = list(recipe)
+    if shuffle:
+        steps = [steps[i] for i in rng.permutation(len(steps))]
+    else:
+        steps.sort(key=lambda step: FAMILIES[step[0]][2])
+    out = img
+    for name, s in steps:
+        out = FAMILIES[name][0](out, s, rng)
+    return quantize_uint8(out)
+
+
+class RandomDegradation:
+    """
+    Draws one random degradation chain per call.
+
+    num_ops_probs: probability of a chain of 0, 1, 2, 3, 4 families. Zero
+                   families (a clean, merely quantised input) teaches the
+                   model to leave good images alone.
+    listed_weight: share of draws taken from the brief's nine families; the
+                   rest come from EXTRA_FAMILIES.
+    shuffle_prob:  fraction of chains applied in random instead of physical order.
+    families:      "v1" (LISTED + EXTRA, the round-2 pipeline), "v2" (also
+                   PLAN_FAMILIES) or "v3" (also V3_FAMILIES, round 7).
+    severity_beta: (a, b) of the Beta distribution severities are drawn from;
+                   a larger b gives milder corruptions.
+    """
+
+    def __init__(self, num_ops_probs=(0.03, 0.34, 0.39, 0.19, 0.05),
+                 listed_weight=0.75, shuffle_prob=0.2, families="v1",
+                 severity_beta=(1.2, 1.5)):
+        self.num_ops_probs = np.asarray(num_ops_probs, dtype=np.float64)
+        self.num_ops_probs /= self.num_ops_probs.sum()
+        self.shuffle_prob = shuffle_prob
+        self.severity_beta = tuple(severity_beta)
+        extra = EXTRA_FAMILY_SETS[families]
+        self.names = LISTED_FAMILIES + extra
+        w = np.array([listed_weight / len(LISTED_FAMILIES)] * len(LISTED_FAMILIES)
+                     + [(1 - listed_weight) / len(extra)] * len(extra))
+        self.family_probs = w / w.sum()
+
+    def sample_recipe(self, rng):
+        k = int(rng.choice(len(self.num_ops_probs), p=self.num_ops_probs))
+        chosen, group_count = [], {}
+        for idx in rng.choice(len(self.names), size=len(self.names), replace=False,
+                              p=self.family_probs):
+            if len(chosen) == k:
+                break
+            name = self.names[idx]
+            group = FAMILIES[name][1]
+            if group_count.get(group, 0) >= _GROUP_LIMIT.get(group, 1):
+                continue
+            group_count[group] = group_count.get(group, 0) + 1
+            chosen.append(name)
+        # Longer chains use gentler individual severities, so a 3-4 family mix
+        # is still a restorable image rather than noise.
+        a, b = self.severity_beta
+        return [(name, float(rng.beta(a, b + 0.6 * (len(chosen) - 1)))) for name in chosen]
+
+    def __call__(self, img, rng=None, return_label=False):
+        rng = rng if rng is not None else np.random.default_rng()
+        recipe = self.sample_recipe(rng)
+        out = apply_recipe(img, recipe, rng, shuffle=rng.random() < self.shuffle_prob)
+        if not return_label:
+            return out
+        # Per-family target: 0 = absent, 0.25..1 = present at that severity.
+        label = np.zeros(NUM_TRAIN_FAMILIES, dtype=np.float32)
+        for name, s in recipe:
+            if name in TRAIN_FAMILIES:           # v2-only families have no label slot
+                label[TRAIN_FAMILIES.index(name)] = 0.25 + 0.75 * s
+        return out, label
+
+
+# ------------------------- fixed benchmark definition ------------------------- #
+# (case name, group, families). The benchmark applies each case to a fixed set
+# of held-out images at evenly spread severities, so every architecture is
+# scored on exactly the same corrupted images, broken down by case.
+BENCHMARK_CASES = (
+    [(name, "single", [name]) for name in LISTED_FAMILIES]
+    + [(name, "extra", [name]) for name in ("correlated_noise", "resize_blur", "small_artifacts")]
+    + [("+".join(f), "pair", list(f)) for f in (
+        ("gaussian_blur", "gaussian_noise"), ("motion_blur", "gaussian_noise"),
+        ("defocus_blur", "poisson_noise"), ("gaussian_noise", "jpeg"),
+        ("gaussian_blur", "jpeg"), ("motion_blur", "jpeg"),
+        ("gaussian_blur", "salt_pepper"), ("defocus_blur", "speckle_noise"),
+        ("poisson_noise", "jpeg"), ("chromatic_aberration", "gaussian_noise"),
+        ("gaussian_noise", "salt_pepper"), ("chromatic_aberration", "defocus_blur"))]
+    + [("+".join(f), "triple", list(f)) for f in (
+        ("gaussian_blur", "gaussian_noise", "jpeg"), ("motion_blur", "poisson_noise", "jpeg"),
+        ("defocus_blur", "speckle_noise", "salt_pepper"),
+        ("chromatic_aberration", "gaussian_blur", "gaussian_noise"),
+        ("motion_blur", "salt_pepper", "jpeg"))]
+    + [(name, "unseen", [name]) for name in UNSEEN_FAMILIES]
+    + [("pixelate+uniform_noise", "unseen", ["pixelate", "uniform_noise"])]
+)
+
+# Benchmark v2 (round 3): families no pipeline trains on, plus the three new
+# v2 training families so their in-distribution quality is on record too.
+BENCHMARK_CASES_V2 = (
+    [(name, "unseen_v2", [name]) for name in UNSEEN_V2_FAMILIES]
+    + [("+".join(f), "unseen_v2", list(f)) for f in (
+        ("glass_blur", "film_grain"), ("line_dropout", "jpeg"))]
+    + [(name, "plan", [name]) for name in ("sensor_noise", "ringing", "double_jpeg")]
+)
+
+# Round 7: check set for the v3 families (trained on only by v3 models).
+BENCHMARK_CASES_V3 = (
+    [(name, "v3", [name]) for name in V3_FAMILIES]
+    + [(name + "+gaussian_noise", "v3", [name, "gaussian_noise"]) for name in V3_FAMILIES]
+)

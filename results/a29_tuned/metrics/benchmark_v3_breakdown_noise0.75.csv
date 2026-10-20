@@ -1,0 +1,14 @@
+level,name,n,input_psnr,psnr,ssim,dists
+overall,all,96,27.0,34.0712,0.9203,0.1125
+group,v3,96,27.0,34.0712,0.9203,0.1125
+domain,natural,48,25.939,31.2951,0.9137,0.0992
+domain,lowlight,24,29.588,38.7324,0.9224,0.1677
+domain,medical,24,26.535,34.9624,0.9315,0.0841
+case,demosaic_artifacts,12,32.755,37.874,0.972,0.0428
+case,chroma_noise,12,27.449,38.5499,0.9709,0.0722
+case,mri_ghosting,12,32.318,32.3024,0.9263,0.101
+case,ct_ring_artifact,12,34.173,35.9805,0.96,0.0766
+case,demosaic_artifacts+gaussian_noise,12,22.19,33.1877,0.8929,0.1467
+case,chroma_noise+gaussian_noise,12,21.744,32.1841,0.8775,0.1624
+case,mri_ghosting+gaussian_noise,12,22.909,30.4111,0.8793,0.153
+case,ct_ring_artifact+gaussian_noise,12,22.466,32.0802,0.8836,0.1456
