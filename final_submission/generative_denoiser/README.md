@@ -125,3 +125,10 @@ python -c "import torch; torch.save(torch.load('results/generative_denoiser/chec
 | Corruption types never seen in training (96 images) | 32.21 | 0.830 | 0.178 |
 
 All at the submitted noise scale 0.75.
+
+## Team
+
+| Name | Roll number |
+|---|---|
+| Sagnik Chandra | M25CSE027 |
+| Shrusti Jain | M25CSE030 |
