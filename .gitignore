@@ -18,6 +18,8 @@ data/*
 *.ckpt
 results/*/checkpoints/*
 results/*/submission/*
+results/*/visualizations/*
+final_submission/**/*.pt
 !results/**/.gitkeep
 
 # OS generated

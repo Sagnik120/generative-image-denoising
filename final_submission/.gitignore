@@ -1,5 +1,0 @@
-
-results/*/visualizations/
-results/*/submission/
-results/*/checkpoints/
-final_submission/**/*.pt
